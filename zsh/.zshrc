@@ -174,19 +174,19 @@ precmd() {
   print -Pn "\e]2;${branch:-${PWD##*/}}\a"
 }
 
-# ===== wtn: 현재 Ghostty 창의 새 탭에서 branch worktree + nvim 자동 셋업 =====
+# ===== wtn: open new Ghostty tab and bootstrap a branch worktree + nvim =====
 # 사용법:
 #   wtn <branch-name>              현재 브랜치 기준
 #   wtn <branch-name> <base>       특정 base 기준 (예: origin/master)
 # 동작:
 #   1. 현재 Ghostty 창에 새 탭 (Cmd+T를 AppleScript로 시뮬레이션)
 #   2. wt switch --create <name> [--base <base>] 실행
-#      → branch worktree가 wt-<branch> 세션 + dev 윈도우(좌:BE / 우:FE) 자동 생성
+#      → `wt` CLI(branch worktree tool)가 wt-<branch> 세션 + dev 윈도우(좌:BE / 우:FE) 자동 생성
 #   3. 같은 wt-<branch> 세션에 nvim 윈도우 추가하고 'nvim .' 실행
 #   4. nvim 윈도우 선택 후 attach → 사용자는 nvim 화면부터 보임
 #   결과:
 #     [wt-<branch> 세션]
-#     ├─ window 0 (dev) : 좌 BE 로그 / 우 FE 로그  ← branch worktree
+#     ├─ window 0 (dev) : 좌 BE 로그 / 우 FE 로그  ← `wt` CLI
 #     └─ window 1 (nvim): nvim                    ← wtn이 추가
 #     Ctrl+B + 0/1 로 전환
 # 주의:
@@ -210,7 +210,7 @@ wtn() {
   if [ -n "$base" ]; then
     wt_cmd="$wt_cmd --base $base"
   fi
-  # branch worktree가 만드는 세션명과 동일하게 — 별도 세션 만들지 않고 그 세션에 합류
+  # `wt switch`가 만드는 세션명과 동일하게 — 별도 세션 만들지 않고 그 세션에 합류
   local wt_session="wt-${name//\//-}"
 
   # 탭 제목 라벨: <branch>(<base>) — base 없으면 <branch>만
@@ -259,3 +259,6 @@ tell application "System Events"
 end tell
 EOF
 }
+
+# Load local-only overrides (secrets, work aliases) — git-ignored
+[ -f ~/.zshrc.local ] && source ~/.zshrc.local

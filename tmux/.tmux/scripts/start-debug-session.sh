@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cwd="${1:?current path required}"
+launch_root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$cwd")"
+app_dir="$launch_root/app"
+
+# Branch-env worktree mode: don't open a new be-fe window — restart only the
+# existing dev window's BE pane in debugpy mode. Triggered when project .env
+# defines WT_API_PORT (rename of legacy project-specific marker).
+# NOTE: the variable names below (WORKTRUNK_*) come from one project's .env
+# convention. Adjust if your project uses different names.
+if [ -f "$launch_root/.env" ] && grep -q "^WORKTRUNK_API_PORT=" "$launch_root/.env"; then
+  # Load branch-env metadata (WORKTRUNK_API_PORT, WORKTRUNK_DOMAIN, ...)
+  set -a
+  # shellcheck disable=SC1091
+  source <(grep -E "^WORKTRUNK_" "$launch_root/.env")
+  set +a
+
+  session_name="$(tmux display -p '#S')"
+  # branch-env's dev window layout: left=BE(pane 1) / right=FE(pane 2), base-index=1
+  be_pane="${session_name}:dev.1"
+
+  if ! tmux list-panes -t "$be_pane" >/dev/null 2>&1; then
+    tmux display-message "Could not find dev-window BE pane. Ensure branch switch is complete."
+    exit 1
+  fi
+
+  # Stop existing runserver → restart in debugpy mode (using branch-env port/domain)
+  tmux send-keys -t "$be_pane" C-c
+  sleep 0.5
+  tmux send-keys -t "$be_pane" "API_PORT=\"${WORKTRUNK_API_PORT}\" WORKTRUNK_DOMAIN=\"${WORKTRUNK_DOMAIN}\" uv run --with debugpy python -m debugpy --listen 5678 manage.py runserver \"0.0.0.0:${WORKTRUNK_API_PORT}\" --settings=server.settings.local --skip-checks --noreload" C-m
+
+  # 백그라운드: 5678 listen 대기 후 nvim 윈도우에 :DapDjango 자동 입력
+  (
+    for _ in $(seq 1 60); do
+      lsof -i :5678 -sTCP:LISTEN >/dev/null 2>&1 && break
+      sleep 0.5
+    done
+    nvim_pane=$(tmux list-panes -s -t "$session_name" \
+      -F '#{pane_id} #{pane_current_command}' \
+      | awk '$2 ~ /^n?vim$/ {print $1; exit}')
+    if [ -n "$nvim_pane" ]; then
+      tmux send-keys -t "$nvim_pane" Escape
+      sleep 0.1
+      tmux send-keys -t "$nvim_pane" ":DapDjango" Enter
+    fi
+  ) >/dev/null 2>&1 &
+
+  tmux display-message "Restarting BE in debugpy mode (waiting on port 5678)..."
+  exit 0
+fi
+
+# 현재 세션 이름 가져오기 (새 세션 만들지 않고 그대로 사용)
+session_name="$(tmux display -p '#S')"
+
+# 이미 be-fe window가 있으면 그쪽으로 이동만 (중복 실행 방지)
+if tmux list-windows -t "$session_name" -F '#W' | grep -qx 'be-fe'; then
+  tmux select-window -t "${session_name}:be-fe"
+  exit 0
+fi
+
+# 새 window "be-fe" 만들기 (현재 nvim window는 건드리지 않음)
+# 좌측 pane (FE)
+fe_pane="$(tmux new-window -P -F '#{pane_id}' -n "be-fe" -c "$app_dir")"
+tmux send-keys -t "$fe_pane" "pnpm start" C-m
+
+# 우측 pane (BE - debugpy listen, nvim에서 :DapDjango 로 attach)
+be_pane="$(tmux split-window -h -P -F '#{pane_id}' -t "$fe_pane" -c "$launch_root")"
+tmux send-keys -t "$be_pane" "uv run --with debugpy python -m debugpy --listen 5678 manage.py runserver 0.0.0.0:7777 --settings=server.settings.local --skip-checks --noreload" C-m
+
+# 백그라운드: BE가 5678 listen 시작될 때까지 기다린 후, 같은 세션의 nvim pane에 :DapDjango 자동 입력
+(
+  # 5678 listen 대기 (최대 30초)
+  for _ in $(seq 1 60); do
+    if lsof -i :5678 -sTCP:LISTEN >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.5
+  done
+
+  # 같은 세션에서 nvim 실행 중인 pane 찾기
+  nvim_pane=$(tmux list-panes -s -t "$session_name" \
+    -F '#{pane_id} #{pane_current_command}' \
+    | awk '$2 ~ /^n?vim$/ {print $1; exit}')
+
+  if [ -n "$nvim_pane" ]; then
+    # Esc로 normal mode 확보 후 :DapDjango 실행
+    tmux send-keys -t "$nvim_pane" Escape
+    sleep 0.1
+    tmux send-keys -t "$nvim_pane" ":DapDjango" Enter
+  fi
+) >/dev/null 2>&1 &

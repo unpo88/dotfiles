@@ -8,3 +8,7 @@
 
 # nvim runtime (절대 commit 금지)
 nvim/.config/nvim/.luarc.json.bak
+
+# Local-only zsh overrides (secrets, work aliases)
+zsh/.zshrc.local
+.zshrc.local
