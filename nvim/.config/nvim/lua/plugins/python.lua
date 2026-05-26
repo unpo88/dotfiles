@@ -38,20 +38,47 @@ return {
       end, {})
 
       -- nvim 시작 시 manage.py 있는 디렉터리면 자동으로 attach 시도
+      -- 타이머 폴링 방식: GUI/embed nvim(neovide, vscode-neovim 등)에서도 동작.
+      -- BE가 뒤늦게 뜨더라도 자동 attach 보장 (tmux 스크립트의 pane→nvim send 경로에 의존 X)
       vim.api.nvim_create_autocmd("VimEnter", {
         callback = function()
           if vim.fn.filereadable(vim.fn.getcwd() .. "/manage.py") == 0 then
             return
           end
-          vim.defer_fn(function()
+          local timer_lib = vim.uv or vim.loop
+          local timer = timer_lib.new_timer()
+          if not timer then return end
+          -- 1.5초 후 시작, 2초 간격 폴링
+          timer:start(1500, 2000, vim.schedule_wrap(function()
+            local ok_dap, dap = pcall(require, "dap")
+            if not ok_dap then return end
+            -- 이미 attach된 세션이 있으면 폴링 종료
+            if dap.session() then
+              timer:stop()
+              if not timer:is_closing() then timer:close() end
+              return
+            end
+            -- BE의 debugpy 5678 listen 상태 확인
             local handle = io.popen("lsof -i :5678 -sTCP:LISTEN 2>/dev/null")
             if not handle then return end
             local out = handle:read("*a") or ""
             handle:close()
-            if out == "" then return end  -- BE 안 떠있으면 skip
+            if out == "" then return end  -- 아직 BE 안 뜸, 다음 tick 재시도
             pcall(function() vim.cmd("DapDjango") end)
             vim.notify("🐛 Django debugger auto-attached", vim.log.levels.INFO)
-          end, 1500)
+          end))
+          -- nvim 종료 시 타이머 정리
+          vim.api.nvim_create_autocmd("VimLeavePre", {
+            once = true,
+            callback = function()
+              pcall(function()
+                if timer and not timer:is_closing() then
+                  timer:stop()
+                  timer:close()
+                end
+              end)
+            end,
+          })
         end,
       })
 
