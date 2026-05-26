@@ -249,8 +249,14 @@ $wt_cmd
 # dev 윈도우 안 pane 순서 swap: FE를 왼쪽, BE를 오른쪽으로.
 tmux swap-pane -s '$wt_session:dev.1' -t '$wt_session:dev.2'
 
-# worktree 디렉터리 = dev 윈도우 pane들이 cd해둔 경로
-worktree_path="\$(tmux display-message -p -t '$wt_session:dev' '#{pane_current_path}' 2>/dev/null)"
+# worktree 디렉터리 계산:
+#   '$wt_session:dev'만 지정하면 swap-pane 직후 active pane(FE = worktree/app)이
+#   잡혀서 nvim cwd가 본진 app 폴더가 되고, debugpy_port_for_cwd()가 .env를
+#   못 찾아 5678로 fallback → BE는 WORKTRUNK_API_PORT+40000으로 listen 중이라
+#   attach 실패. 그래서 dev.1 pane path를 받아 git rev-parse로 worktree 루트로
+#   정규화한다 (BE/FE 어느 쪽이든 worktree 안이면 동일한 루트가 나옴).
+fe_path="\$(tmux display-message -p -t '$wt_session:dev.1' '#{pane_current_path}' 2>/dev/null)"
+worktree_path="\$(git -C "\$fe_path" rev-parse --show-toplevel 2>/dev/null)"
 
 # BE를 debugpy 모드로 자동 재시작 (start-debug-session.sh의 worktrunk 분기 활용).
 # tmux 외부 셸에서 호출하므로 WT_SESSION_NAME으로 대상 세션 지정.
