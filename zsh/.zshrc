@@ -153,16 +153,29 @@ source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 export PATH="/opt/homebrew/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 
-# ===== 자동 tmux 진입 =====
-# 새 터미널 열 때 자동으로 'main' tmux 세션에 진입.
-# - 이미 tmux 안이면 skip ($TMUX)
-# - non-interactive shell이면 skip ($PS1)
-# - VSCode/Kiro 등 IDE 내장 터미널은 skip (자체 디버깅 도구와 충돌 방지)
-if [ -z "$TMUX" ] && [ -n "$PS1" ] \
-  && [[ "$TERM_PROGRAM" != "vscode" ]] \
-  && [[ "$TERM_PROGRAM" != "kiro" ]]; then
-  tmux attach -t main 2>/dev/null || tmux new-session -s main
-fi
+# ===== Ghostty에서만 nvim을 tmux로 감싸기 =====
+# 의도:
+#   - 어떤 터미널이든 셸 자체는 plain (자동 tmux attach 안 함)
+#   - 단, Ghostty에서 `nvim` 호출 시에만 tmux 'main' 세션 안에서 nvim 실행
+#   - 이미 tmux 안이거나 Ghostty가 아닌 터미널(iTerm 등)에선 plain nvim
+nvim() {
+  if [ -n "$TMUX" ] || [[ "$TERM_PROGRAM" != "ghostty" ]]; then
+    command nvim "$@"
+    return
+  fi
+  local quoted="command nvim"
+  for arg in "$@"; do
+    quoted+=" $(printf '%q' "$arg")"
+  done
+  # main 세션 있으면 그 안에 새 윈도우로 nvim 띄우고 attach, 없으면 새로 생성
+  # tmux new-window는 새 윈도우를 자동 select하므로 별도 select-window 불필요
+  if tmux has-session -t main 2>/dev/null; then
+    tmux new-window -t main: -n nvim "$quoted"
+    tmux attach -t main
+  else
+    tmux new-session -s main "$quoted"
+  fi
+}
 
 # ===== Ghostty 탭 제목 자동 갱신 =====
 # 현재 git 브랜치를 탭 제목으로 표시 (워크트리별 구분).
