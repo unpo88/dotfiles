@@ -167,14 +167,11 @@ nvim() {
   for arg in "$@"; do
     quoted+=" $(printf '%q' "$arg")"
   done
-  # main 세션 있으면 그 안에 새 윈도우로 nvim 띄우고 attach, 없으면 새로 생성
-  # tmux new-window는 새 윈도우를 자동 select하므로 별도 select-window 불필요
-  if tmux has-session -t main 2>/dev/null; then
-    tmux new-window -t main: -n nvim "$quoted"
-    tmux attach -t main
-  else
-    tmux new-session -s main "$quoted"
-  fi
+  # Ghostty 창/탭/분할마다 독립된 ad-hoc 세션 (이름: nvim-<pid>).
+  # 같은 'main' 세션에 여러 client가 attach하면 모든 client가 같은 화면을
+  # 보게 되어(=tmux의 정상 동작) 분할 영역끼리 sync된 것처럼 보이는 문제 회피.
+  # nvim 종료 시 그 세션도 함께 종료되어 자동 정리됨.
+  tmux new-session -s "nvim-$$" "$quoted"
 }
 
 # ===== Ghostty 탭 제목 자동 갱신 =====
