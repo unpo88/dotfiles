@@ -206,6 +206,15 @@ wtn() {
     echo "git repo 안에서 실행해주세요"
     return 1
   fi
+  # base 인자 사전 검증 — 오타로 새 탭 열고 실패하는 걸 방지
+  if [ -n "$base" ]; then
+    if ! git -C "$root" rev-parse --verify "$base" >/dev/null 2>&1; then
+      echo "❌ base 브랜치/커밋을 찾을 수 없습니다: $base"
+      echo "   - 오타 확인 (예: 'origint/master' → 'origin/master')"
+      echo "   - 원격 최신 받기: git fetch origin"
+      return 1
+    fi
+  fi
   local wt_cmd="wt switch --create $name"
   if [ -n "$base" ]; then
     wt_cmd="$wt_cmd --base $base"
