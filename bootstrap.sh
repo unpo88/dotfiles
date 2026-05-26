@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# macOS dev environment bootstrap.
+# Idempotent — safe to re-run.
+
+set -euo pipefail
+
+step() { printf '\n\033[1;36m═══ %s ═══\033[0m\n' "$1"; }
+ok()   { printf '\033[1;32m✓\033[0m %s\n' "$1"; }
+
+# ─── Xcode Command Line Tools ────────────────────────────────────────────
+step "Xcode Command Line Tools"
+if ! xcode-select -p &>/dev/null; then
+  xcode-select --install || true
+  echo "GUI 다이얼로그에서 설치를 완료한 뒤 이 스크립트를 다시 실행하세요."
+  exit 0
+fi
+ok "already installed"
+
+# ─── Homebrew ────────────────────────────────────────────────────────────
+step "Homebrew"
+if ! command -v brew &>/dev/null; then
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+else
+  ok "already installed"
+fi
+
+# ─── Brew packages ───────────────────────────────────────────────────────
+step "Brew packages"
+brew install \
+  stow \
+  neovim \
+  tmux \
+  ripgrep \
+  fd \
+  lazygit \
+  git \
+  node \
+  pyenv
+
+# ─── Casks (terminal + font) ─────────────────────────────────────────────
+step "Casks: Ghostty + Nerd Font"
+brew install --cask ghostty || true
+brew install --cask font-jetbrains-mono-nerd-font || true
+
+# ─── oh-my-zsh ───────────────────────────────────────────────────────────
+step "oh-my-zsh"
+if [ ! -d "$HOME/.oh-my-zsh" ]; then
+  RUNZSH=no KEEP_ZSHRC=yes sh -c \
+    "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" \
+    "" --unattended
+else
+  ok "already installed"
+fi
+
+# ─── Python (via pyenv) ──────────────────────────────────────────────────
+step "Python 3.12.11"
+pyenv install -s 3.12.11
+
+# ─── nvm + Node ──────────────────────────────────────────────────────────
+step "nvm + Node 20, 22"
+if [ ! -d "$HOME/.nvm" ]; then
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+fi
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$NVM_DIR/nvm.sh"
+  nvm install 20
+  nvm install 22
+fi
+
+# ─── tmux Plugin Manager (TPM) ───────────────────────────────────────────
+step "tmux Plugin Manager"
+if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
+  git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+else
+  ok "already installed"
+fi
+
+# ─── Vim Vundle ──────────────────────────────────────────────────────────
+step "Vim Vundle"
+if [ ! -d "$HOME/.vim/bundle/Vundle.vim" ]; then
+  git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
+else
+  ok "already installed"
+fi
+
+# ─── Done ────────────────────────────────────────────────────────────────
+step "Done"
+cat <<'EOF'
+
+다음 단계:
+  1. cd ~/dotfiles && stow nvim tmux ghostty zsh vim
+  2. 새 zsh 세션 열기 (또는 exec zsh)
+  3. nvim 실행 → lazy.nvim이 플러그인 + Mason 도구 자동 설치
+  4. tmux 실행 → prefix + I 로 플러그인 설치
+  5. (선택) vim 실행 → :PluginInstall
+
+EOF
