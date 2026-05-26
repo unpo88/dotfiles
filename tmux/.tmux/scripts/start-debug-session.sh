@@ -22,7 +22,12 @@ if [ -f "$launch_root/.env" ] && grep -q "^WORKTRUNK_API_PORT=" "$launch_root/.e
   # python.lua의 DapDjango 어댑터/폴링도 동일 규약을 따름.
   debugpy_port=$((WORKTRUNK_API_PORT + 40000))
 
-  session_name="$(tmux display -p '#S')"
+  # tmux 안에서 호출되면 display로 session 얻고, 외부(예: wtn)에서 호출되면 envar 사용
+  session_name="${WT_SESSION_NAME:-$(tmux display -p '#S' 2>/dev/null)}"
+  if [ -z "$session_name" ]; then
+    echo "❌ 세션을 식별할 수 없습니다 (WT_SESSION_NAME 미설정 + tmux 외부)." >&2
+    exit 1
+  fi
   # dev 윈도우 안에서 BE pane을 동적으로 찾기 (python/uv 실행 중인 pane).
   # wtn이 좌우 swap한 환경(FE 좌/BE 우)과 worktrunk 기본 환경(BE 좌/FE 우) 양쪽 모두 지원.
   be_pane="$(tmux list-panes -t "${session_name}:dev" -F '#{pane_id} #{pane_current_command}' 2>/dev/null \

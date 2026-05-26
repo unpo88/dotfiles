@@ -248,11 +248,22 @@ printf '\e]2;%s\a' '$label'
 set -e
 cd '$root'
 $wt_cmd
-# wt switch가 wt-<branch> 세션 + dev 윈도우(좌 BE / 우 FE)를 만들어 둠
-# dev 윈도우 안 pane 순서도 swap: FE를 왼쪽, BE를 오른쪽으로
+# wt switch가 wt-<branch> 세션 + dev 윈도우(좌 BE / 우 FE)를 만들어 둠.
+# dev 윈도우 안 pane 순서 swap: FE를 왼쪽, BE를 오른쪽으로.
 tmux swap-pane -s '$wt_session:dev.1' -t '$wt_session:dev.2'
-# 같은 세션에 nvim 윈도우만 추가
-tmux new-window -t '$wt_session' -n nvim -c "\$PWD"
+
+# worktree 디렉터리 = dev 윈도우 pane들이 cd해둔 경로
+worktree_path="\$(tmux display-message -p -t '$wt_session:dev' '#{pane_current_path}' 2>/dev/null)"
+
+# BE를 debugpy 모드로 자동 재시작 (start-debug-session.sh의 worktrunk 분기 활용).
+# tmux 외부 셸에서 호출하므로 WT_SESSION_NAME으로 대상 세션 지정.
+if [ -n "\$worktree_path" ]; then
+  WT_SESSION_NAME='$wt_session' ~/.tmux/scripts/start-debug-session.sh "\$worktree_path"
+fi
+
+# 같은 세션에 nvim 윈도우 추가 — cwd는 worktree (본진 아님!).
+# 이게 본진 cwd로 열리면 nvim DAP가 본진 .env 기준 5678로 attach해버려서 충돌.
+tmux new-window -t '$wt_session' -n nvim -c "\${worktree_path:-\$PWD}"
 tmux send-keys -t '$wt_session:nvim' 'nvim .' Enter
 # 순서 교환: nvim → 1번 (왼쪽), dev → 2번 (오른쪽)
 tmux swap-window -s '$wt_session:dev' -t '$wt_session:nvim'
