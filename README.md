@@ -69,8 +69,29 @@ cd ~/dotfiles
 stow -D nvim tmux ghostty zsh vim   # 파일은 repo에 그대로 유지
 ```
 
+## 로컬 시크릿 처리 (fork 사용자 포함)
+
+이 repo의 `zsh/.zshrc` 끝에는 다음 한 줄이 들어 있습니다:
+
+```bash
+[ -f ~/.zshrc.local ] && source ~/.zshrc.local
+```
+
+API key, 회사용 alias, 사적인 PATH 같이 **commit하면 안 되는 것**은 `~/.zshrc.local` 에 넣으면 `.zshrc` 마지막에 자동 로드됩니다. `.gitignore`에 패턴이 등록돼 있어 실수로 push될 위험이 없습니다.
+
+예시 (`~/.zshrc.local`):
+```bash
+export OPENAI_API_KEY="..."
+export ANTHROPIC_API_KEY="..."
+alias work-vpn="..."
+```
+
 ## 메모
 
 - `nvim/.config/nvim/lazy-lock.json`은 commit 대상 (플러그인 버전 고정).
-- 시크릿(API key, AWS credentials 등)은 **repo에 포함하지 않음**. 머신 로컬에 별도 관리.
-- 회사용 alias나 비공개 변수가 필요하면 `~/.zshrc.local`을 만들고 `.zshrc` 끝에서 `source ~/.zshrc.local` 해서 분리하는 것을 권장.
+- 시크릿(API key, AWS credentials 등)은 **repo에 포함하지 않음** — 위 `.zshrc.local` 패턴 활용.
+- 본 repo는 MIT License로 공개. 자유롭게 fork·참고 가능.
+
+## License
+
+[MIT](LICENSE)
