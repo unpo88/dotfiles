@@ -27,9 +27,11 @@ if [ -f "$launch_root/.env" ] && grep -q "^WORKTRUNK_API_PORT=" "$launch_root/.e
   fi
 
   # Stop existing runserver → restart in debugpy mode (using branch-env port/domain)
+  # NOTE: -Xfrozen_modules=off / PYDEVD_DISABLE_FILE_VALIDATION=1 → Python 3.11+ frozen
+  # modules가 debugpy breakpoint를 miss시키는 문제 회피
   tmux send-keys -t "$be_pane" C-c
   sleep 0.5
-  tmux send-keys -t "$be_pane" "API_PORT=\"${WORKTRUNK_API_PORT}\" WORKTRUNK_DOMAIN=\"${WORKTRUNK_DOMAIN}\" uv run --with debugpy python -m debugpy --listen 5678 manage.py runserver \"0.0.0.0:${WORKTRUNK_API_PORT}\" --settings=server.settings.local --skip-checks --noreload" C-m
+  tmux send-keys -t "$be_pane" "PYDEVD_DISABLE_FILE_VALIDATION=1 API_PORT=\"${WORKTRUNK_API_PORT}\" WORKTRUNK_DOMAIN=\"${WORKTRUNK_DOMAIN}\" uv run --with debugpy python -Xfrozen_modules=off -m debugpy --listen 5678 manage.py runserver \"0.0.0.0:${WORKTRUNK_API_PORT}\" --settings=server.settings.local --skip-checks --noreload" C-m
 
   # 백그라운드: 5678 listen 대기 후 nvim 윈도우에 :DapDjango 자동 입력
   (
@@ -66,8 +68,10 @@ fe_pane="$(tmux new-window -P -F '#{pane_id}' -n "be-fe" -c "$app_dir")"
 tmux send-keys -t "$fe_pane" "pnpm start" C-m
 
 # 우측 pane (BE - debugpy listen, nvim에서 :DapDjango 로 attach)
+# NOTE: -Xfrozen_modules=off / PYDEVD_DISABLE_FILE_VALIDATION=1 → Python 3.11+ frozen
+# modules가 debugpy breakpoint를 miss시키는 문제 회피
 be_pane="$(tmux split-window -h -P -F '#{pane_id}' -t "$fe_pane" -c "$launch_root")"
-tmux send-keys -t "$be_pane" "uv run --with debugpy python -m debugpy --listen 5678 manage.py runserver 0.0.0.0:7777 --settings=server.settings.local --skip-checks --noreload" C-m
+tmux send-keys -t "$be_pane" "PYDEVD_DISABLE_FILE_VALIDATION=1 uv run --with debugpy python -Xfrozen_modules=off -m debugpy --listen 5678 manage.py runserver 0.0.0.0:7777 --settings=server.settings.local --skip-checks --noreload" C-m
 
 # 백그라운드: BE가 5678 listen 시작될 때까지 기다린 후, 같은 세션의 nvim pane에 :DapDjango 자동 입력
 (
