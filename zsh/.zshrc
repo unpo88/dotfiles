@@ -249,6 +249,8 @@ set -e
 cd '$root'
 $wt_cmd
 # wt switch가 wt-<branch> 세션 + dev 윈도우(좌 BE / 우 FE)를 만들어 둠
+# dev 윈도우 안 pane 순서도 swap: FE를 왼쪽, BE를 오른쪽으로
+tmux swap-pane -s '$wt_session:dev.1' -t '$wt_session:dev.2'
 # 같은 세션에 nvim 윈도우만 추가
 tmux new-window -t '$wt_session' -n nvim -c "\$PWD"
 tmux send-keys -t '$wt_session:nvim' 'nvim .' Enter
@@ -287,3 +289,5 @@ EOF
 
 # Load local-only overrides (secrets, work aliases) — git-ignored
 [ -f ~/.zshrc.local ] && source ~/.zshrc.local
+
+if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi
