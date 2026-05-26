@@ -18,11 +18,13 @@ if [ -f "$launch_root/.env" ] && grep -q "^WORKTRUNK_API_PORT=" "$launch_root/.e
   set +a
 
   session_name="$(tmux display -p '#S')"
-  # branch-env's dev window layout: left=BE(pane 1) / right=FE(pane 2), base-index=1
-  be_pane="${session_name}:dev.1"
+  # dev 윈도우 안에서 BE pane을 동적으로 찾기 (python/uv 실행 중인 pane).
+  # wtn이 좌우 swap한 환경(FE 좌/BE 우)과 worktrunk 기본 환경(BE 좌/FE 우) 양쪽 모두 지원.
+  be_pane="$(tmux list-panes -t "${session_name}:dev" -F '#{pane_id} #{pane_current_command}' 2>/dev/null \
+    | awk 'tolower($2) ~ /^(python|uv)$/ {print $1; exit}')"
 
-  if ! tmux list-panes -t "$be_pane" >/dev/null 2>&1; then
-    tmux display-message "Could not find dev-window BE pane. Ensure branch switch is complete."
+  if [ -z "$be_pane" ]; then
+    tmux display-message "Could not find dev-window BE pane (no python/uv running)."
     exit 1
   fi
 
