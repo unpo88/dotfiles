@@ -1,0 +1,10 @@
+# OS
+.DS_Store
+
+# Editor
+.vim/
+*.swp
+*.swo
+
+# nvim runtime (절대 commit 금지)
+nvim/.config/nvim/.luarc.json.bak
