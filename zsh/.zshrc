@@ -157,12 +157,10 @@ export PATH="$HOME/.local/bin:$PATH"
 # 새 터미널 열 때 자동으로 'main' tmux 세션에 진입.
 # - 이미 tmux 안이면 skip ($TMUX)
 # - non-interactive shell이면 skip ($PS1)
-# - VSCode/Kiro/Ghostty 등 탭 단위 격리가 필요한 터미널은 skip
-#   (Ghostty: worktree별 새 탭이 같은 main 세션에 attach되는 미러링 방지)
+# - VSCode/Kiro 등 IDE 내장 터미널은 skip (자체 디버깅 도구와 충돌 방지)
 if [ -z "$TMUX" ] && [ -n "$PS1" ] \
   && [[ "$TERM_PROGRAM" != "vscode" ]] \
-  && [[ "$TERM_PROGRAM" != "kiro" ]] \
-  && [[ "$TERM_PROGRAM" != "ghostty" ]]; then
+  && [[ "$TERM_PROGRAM" != "kiro" ]]; then
   tmux attach -t main 2>/dev/null || tmux new-session -s main
 fi
 
@@ -248,7 +246,12 @@ tmux select-window -t '$wt_session:nvim'
 tmux set-option -t '$wt_session' set-titles on
 tmux set-option -t '$wt_session' set-titles-string '$label'
 rm -f '$script'
-exec tmux attach -t '$wt_session'
+# 이미 tmux 안(자동 attach된 main 세션)이면 nested 에러 피해서 switch-client로 전환
+if [ -n "\$TMUX" ]; then
+  exec tmux switch-client -t '$wt_session'
+else
+  exec tmux attach -t '$wt_session'
+fi
 EOF
   chmod +x "$script"
 
