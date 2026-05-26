@@ -9,13 +9,32 @@ return {
     "mfussenegger/nvim-dap",
     optional = true,
     init = function()
-      -- :DapDjango → 별도 pane에서 debugpy --listen 5678 로 띄운 BE에 attach
+      -- worktree별 독립 debugpy 포트 규약:
+      --   nvim cwd의 .env에 WORKTRUNK_API_PORT 있으면 → debugpy_port = API_PORT + 40000
+      --   없으면 → 5678 (본진 lemonbase repo)
+      -- 같은 규약을 tmux start-debug-session.sh도 따른다.
+      local function debugpy_port_for_cwd()
+        local f = io.open(vim.fn.getcwd() .. "/.env", "r")
+        if not f then return 5678 end
+        for line in f:lines() do
+          local api = line:match("^WORKTRUNK_API_PORT=(%d+)")
+          if api then
+            f:close()
+            return tonumber(api) + 40000
+          end
+        end
+        f:close()
+        return 5678
+      end
+
+      -- :DapDjango → 같은 디렉터리의 .env 기반으로 결정된 포트의 debugpy에 attach
       vim.api.nvim_create_user_command("DapDjango", function()
         local dap = require("dap")
+        local port = debugpy_port_for_cwd()
         dap.adapters.python = {
           type = "server",
           host = "127.0.0.1",
-          port = 5678,
+          port = port,
         }
 
         -- attach 시작 / 브포 hit 시 DAP UI (Scopes/Watches/Stack/REPL) 자동 열기
@@ -38,13 +57,15 @@ return {
       end, {})
 
       -- nvim 시작 시 manage.py 있는 디렉터리면 자동으로 attach 시도
-      -- BE가 뒤늦게 뜨면 폴링하다가, 5678 listen 감지되면 :DapDjango 1회 시도 후 종료
+      -- BE가 뒤늦게 뜨면 폴링하다가, debugpy 포트 listen 감지되면 :DapDjango 1회 시도 후 종료
       -- 최대 ~60초 폴링 후 포기 (다른 BE가 점유 중이거나 attach 실패해도 무한 반복 방지)
       vim.api.nvim_create_autocmd("VimEnter", {
         callback = function()
           if vim.fn.filereadable(vim.fn.getcwd() .. "/manage.py") == 0 then
             return
           end
+          local port = debugpy_port_for_cwd()
+          local lsof_cmd = string.format("lsof -i :%d -sTCP:LISTEN 2>/dev/null", port)
           local timer_lib = vim.uv or vim.loop
           local timer = timer_lib.new_timer()
           if not timer then return end
@@ -68,12 +89,12 @@ return {
               stop_timer()
               return
             end
-            local handle = io.popen("lsof -i :5678 -sTCP:LISTEN 2>/dev/null")
+            local handle = io.popen(lsof_cmd)
             if not handle then return end
             local out = handle:read("*a") or ""
             handle:close()
             if out == "" then return end  -- 아직 BE 안 뜸, 다음 tick 재시도
-            -- 5678 listen 확인 → 1회만 attach 시도 후 timer 종료
+            -- debugpy 포트 listen 확인 → 1회만 attach 시도 후 timer 종료
             -- (성공이든 실패든 반복하지 않음 — "already being debugged" 같은 충돌 시
             --  에러 창이 반복적으로 뜨는 것 방지)
             stop_timer()

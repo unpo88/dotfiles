@@ -17,6 +17,11 @@ if [ -f "$launch_root/.env" ] && grep -q "^WORKTRUNK_API_PORT=" "$launch_root/.e
   source <(grep -E "^WORKTRUNK_" "$launch_root/.env")
   set +a
 
+  # worktree별 debugpy 포트: WORKTRUNK_API_PORT + 40000.
+  # 본진(아래 일반 분기)은 5678 고정, worktree들은 이 규약으로 독립 포트 보유.
+  # python.lua의 DapDjango 어댑터/폴링도 동일 규약을 따름.
+  debugpy_port=$((WORKTRUNK_API_PORT + 40000))
+
   session_name="$(tmux display -p '#S')"
   # dev 윈도우 안에서 BE pane을 동적으로 찾기 (python/uv 실행 중인 pane).
   # wtn이 좌우 swap한 환경(FE 좌/BE 우)과 worktrunk 기본 환경(BE 좌/FE 우) 양쪽 모두 지원.
@@ -33,12 +38,12 @@ if [ -f "$launch_root/.env" ] && grep -q "^WORKTRUNK_API_PORT=" "$launch_root/.e
   # modules가 debugpy breakpoint를 miss시키는 문제 회피
   tmux send-keys -t "$be_pane" C-c
   sleep 0.5
-  tmux send-keys -t "$be_pane" "PYDEVD_DISABLE_FILE_VALIDATION=1 API_PORT=\"${WORKTRUNK_API_PORT}\" WORKTRUNK_DOMAIN=\"${WORKTRUNK_DOMAIN}\" uv run --with debugpy python -Xfrozen_modules=off -m debugpy --listen 5678 manage.py runserver \"0.0.0.0:${WORKTRUNK_API_PORT}\" --settings=server.settings.local --skip-checks --noreload" C-m
+  tmux send-keys -t "$be_pane" "PYDEVD_DISABLE_FILE_VALIDATION=1 API_PORT=\"${WORKTRUNK_API_PORT}\" WORKTRUNK_DOMAIN=\"${WORKTRUNK_DOMAIN}\" uv run --with debugpy python -Xfrozen_modules=off -m debugpy --listen ${debugpy_port} manage.py runserver \"0.0.0.0:${WORKTRUNK_API_PORT}\" --settings=server.settings.local --skip-checks --noreload" C-m
 
-  # 백그라운드: 5678 listen 대기 후 nvim 윈도우에 :DapDjango 자동 입력
+  # 백그라운드: debugpy_port listen 대기 후 nvim 윈도우에 :DapDjango 자동 입력
   (
     for _ in $(seq 1 60); do
-      lsof -i :5678 -sTCP:LISTEN >/dev/null 2>&1 && break
+      lsof -i :"${debugpy_port}" -sTCP:LISTEN >/dev/null 2>&1 && break
       sleep 0.5
     done
     nvim_pane=$(tmux list-panes -s -t "$session_name" \
@@ -51,7 +56,7 @@ if [ -f "$launch_root/.env" ] && grep -q "^WORKTRUNK_API_PORT=" "$launch_root/.e
     fi
   ) >/dev/null 2>&1 &
 
-  tmux display-message "Restarting BE in debugpy mode (waiting on port 5678)..."
+  tmux display-message "Restarting BE in debugpy mode (waiting on port ${debugpy_port})..."
   exit 0
 fi
 
