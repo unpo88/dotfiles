@@ -11,8 +11,11 @@ dotfiles/
 ├── bootstrap.sh                                          # 새 컴퓨터 셋업 자동화
 ├── nvim/.config/nvim/                                    → ~/.config/nvim
 ├── tmux/.tmux.conf                                       → ~/.tmux.conf
-├── ghostty/Library/Application Support/com.mitchellh.ghostty/config
-│                                                         → ~/Library/Application Support/com.mitchellh.ghostty/config
+├── ghostty/                                              # 상세는 ghostty/README.md
+│   └── Library/Application Support/com.mitchellh.ghostty/
+│       ├── config                                        → ~/Library/.../config
+│       ├── cursor_shaders/                               # 커서 효과 GLSL
+│       └── shaders/                                      # 배경/풀스크린 GLSL
 ├── zsh/
 │   ├── .zshrc                                            → ~/.zshrc
 │   └── .zprofile                                         → ~/.zprofile
@@ -86,9 +89,21 @@ export ANTHROPIC_API_KEY="..."
 alias work-vpn="..."
 ```
 
+## Ghostty 커스터마이즈 (셰이더 등)
+
+[`ghostty/README.md`](ghostty/README.md) 참고. 커서 트레일/배경 효과 GLSL 셰이더 카탈로그와 교체 방법이 정리돼 있습니다.
+
+활성 셰이더 빠르게 바꾸기: `ghostty/.../config`의 `# ===== Shaders =====` 블록에서 주석 처리만 바꾸고 `Cmd+Shift+,`로 reload.
+
+## nvim 플러그인 노트
+
+- **smear-cursor.nvim** — nvim 내부 커서에 부드러운 트레일. `lua/plugins/smear-cursor.lua`.
+- **aerial.nvim commit pin** — nvim 0.12에서 `TSNode:start()`가 nil이 되어 v2.7.0이 깨집니다. `lua/plugins/aerial.lua`에서 v4.0.0 commit(`ac583c3`)으로 hard-pin. 이 pin은 `lazy-lock.json`보다 우선하므로 `:Lazy update`해도 v4.0.0 유지.
+
 ## 메모
 
-- `nvim/.config/nvim/lazy-lock.json`은 commit 대상 (플러그인 버전 고정).
+- `nvim/.config/nvim/lazy-lock.json`은 commit 대상이지만 로컬에서는 `git update-index --skip-worktree`로 freeze해뒀습니다. lazy.nvim이 `:Lazy update`로 working tree를 덮어써도 git에 안 보이므로, **버전을 정말로 강제해야 하는 플러그인은 plugin spec에 `commit = "..."`로 명시 pin**하세요 (aerial 예시 참고).
+- skip-worktree 해제: `git update-index --no-skip-worktree nvim/.config/nvim/lazy-lock.json`
 - 시크릿(API key, AWS credentials 등)은 **repo에 포함하지 않음** — 위 `.zshrc.local` 패턴 활용.
 - 본 repo는 MIT License로 공개. 자유롭게 fork·참고 가능.
 
