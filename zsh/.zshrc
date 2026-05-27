@@ -237,58 +237,67 @@ wtn() {
 #!/bin/zsh
 printf '\e]2;%s\a' '$label'
 
-if tmux has-session -t '$wt_session' 2>/dev/null; then
+# worktree 경로 확인
+worktree_dir="\$(git -C '$root' worktree list | awk -v b='[$name]' '\$3==b {print \$1}')"
+if [ -z "\$worktree_dir" ]; then
+  echo "❌ worktree '$name' 경로를 찾을 수 없습니다"
+  exit 1
+fi
+
+# start.sh와 동일한 로직으로 실제 tmux 세션 이름 계산
+# start.sh: BRANCH_SANITIZED="\${DOMAIN%.lemonbase.test}" SESSION="wt-\${BRANCH_SANITIZED}"
+env_file="\${worktree_dir}/.env"
+if [ -f "\$env_file" ]; then
+  _wt_domain="\$(grep '^WORKTRUNK_DOMAIN=' "\$env_file" | cut -d= -f2)"
+fi
+if [ -n "\$_wt_domain" ]; then
+  actual_session="wt-\${_wt_domain%.lemonbase.test}"
+else
+  actual_session='$wt_session'
+fi
+
+if tmux has-session -t "\$actual_session" 2>/dev/null; then
   # 세션 살아있음 — nvim 윈도우가 없으면 추가, 있으면 그냥 포커스
-  if ! tmux list-windows -t '$wt_session' -F '#W' | grep -qx 'nvim'; then
-    fe_path="\$(tmux display-message -p -t '$wt_session:dev.1' '#{pane_current_path}' 2>/dev/null)"
-    worktree_path="\$(git -C "\$fe_path" rev-parse --show-toplevel 2>/dev/null)"
-    tmux new-window -t '$wt_session' -n nvim -c "\${worktree_path:-\$PWD}"
-    tmux send-keys -t '$wt_session:nvim' 'NVIM_WORKTREE=1 nvim .' Enter
-    tmux swap-window -s '$wt_session:dev' -t '$wt_session:nvim' 2>/dev/null || true
+  if ! tmux list-windows -t "\$actual_session" -F '#W' | grep -qx 'nvim'; then
+    tmux new-window -t "\$actual_session" -n nvim -c "\$worktree_dir"
+    tmux send-keys -t "\$actual_session:nvim" 'NVIM_WORKTREE=1 nvim .' Enter
+    tmux swap-window -s "\$actual_session:dev" -t "\$actual_session:nvim" 2>/dev/null || true
   fi
-  tmux select-window -t '$wt_session:nvim' 2>/dev/null || tmux select-window -t '$wt_session'
+  tmux select-window -t "\$actual_session:nvim" 2>/dev/null || tmux select-window -t "\$actual_session"
 else
   # 세션 없음 — .env에서 WORKTRUNK_* 읽어 start.sh 직접 호출
   # (wt switch는 인터랙티브 셸 통합 필요 → 스크립트 내 사용 불가)
   set -e
-  worktree_dir="\$(git -C '$root' worktree list | awk -v b='[$name]' '\$3==b {print \$1}')"
-  if [ -z "\$worktree_dir" ]; then
-    echo "❌ worktree '$name' 경로를 찾을 수 없습니다"
-    exit 1
-  fi
-  env_file="\${worktree_dir}/.env"
   if [ ! -f "\$env_file" ]; then
     echo "❌ \$env_file 없음 — setup이 완료되지 않은 worktree입니다"
     exit 1
   fi
   _wt_api_port="\$(grep '^WORKTRUNK_API_PORT=' "\$env_file" | cut -d= -f2)"
   _wt_fe_port="\$(grep '^WORKTRUNK_FRONTEND_PORT=' "\$env_file" | cut -d= -f2)"
-  _wt_domain="\$(grep '^WORKTRUNK_DOMAIN=' "\$env_file" | cut -d= -f2)"
   if [ -z "\$_wt_api_port" ] || [ -z "\$_wt_fe_port" ] || [ -z "\$_wt_domain" ]; then
     echo "❌ .env에 WORKTRUNK_* 값이 없습니다. setup이 완료되지 않은 worktree입니다"
     exit 1
   fi
   cd "\$worktree_dir"
   ./scripts/worktrunk/start.sh "\$_wt_api_port" "\$_wt_fe_port" "\$_wt_domain" '$_wtn_repo'
-  tmux swap-pane -s '$wt_session:dev.1' -t '$wt_session:dev.2' 2>/dev/null || true
-  # worktree_dir은 이미 정확히 알고 있으므로 tmux pane path 재조회 불필요
+  tmux swap-pane -s "\$actual_session:dev.1" -t "\$actual_session:dev.2" 2>/dev/null || true
   debugpy_port="\$(( \$_wt_api_port + 40000 ))"
   if ! lsof -i :"\$debugpy_port" -sTCP:LISTEN >/dev/null 2>&1; then
-    WT_SESSION_NAME='$wt_session' ~/.tmux/scripts/start-debug-session.sh "\$worktree_dir"
+    WT_SESSION_NAME="\$actual_session" ~/.tmux/scripts/start-debug-session.sh "\$worktree_dir"
   fi
-  tmux new-window -t '$wt_session' -n nvim -c "\$worktree_dir"
-  tmux send-keys -t '$wt_session:nvim' 'NVIM_WORKTREE=1 nvim .' Enter
-  tmux swap-window -s '$wt_session:dev' -t '$wt_session:nvim'
-  tmux select-window -t '$wt_session:nvim'
+  tmux new-window -t "\$actual_session" -n nvim -c "\$worktree_dir"
+  tmux send-keys -t "\$actual_session:nvim" 'NVIM_WORKTREE=1 nvim .' Enter
+  tmux swap-window -s "\$actual_session:dev" -t "\$actual_session:nvim"
+  tmux select-window -t "\$actual_session:nvim"
 fi
 
-tmux set-option -t '$wt_session' set-titles on
-tmux set-option -t '$wt_session' set-titles-string '$label'
+tmux set-option -t "\$actual_session" set-titles on
+tmux set-option -t "\$actual_session" set-titles-string '$label'
 rm -f '$script'
 if [ -n "\$TMUX" ]; then
-  exec tmux switch-client -t '$wt_session'
+  exec tmux switch-client -t "\$actual_session"
 else
-  exec tmux attach -t '$wt_session'
+  exec tmux attach -t "\$actual_session"
 fi
 ATTACH_EOF
 
