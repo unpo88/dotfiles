@@ -184,18 +184,15 @@ precmd() {
 
 # ===== wtn: open new Ghostty tab and bootstrap a branch worktree + nvim =====
 # 사용법:
-#   wtn <branch-name>              현재 브랜치 기준
-#   wtn <branch-name> <base>       특정 base 기준 (예: origin/master)
+#   wtn <branch-name>              신규 worktree 생성 또는 기존 worktree attach
+#   wtn <branch-name> <base>       특정 base 기준 신규 생성
 # 동작:
-#   1. 현재 Ghostty 창에 새 탭 (Cmd+T를 AppleScript로 시뮬레이션)
-#   2. wt switch --create <name> [--base <base>] 실행
-#      → `wt` CLI(branch worktree tool)가 wt-<branch> 세션 + dev 윈도우(좌:BE / 우:FE) 자동 생성
-#   3. 같은 wt-<branch> 세션에 nvim 윈도우 추가하고 'nvim .' 실행
-#   4. nvim 윈도우 선택 후 attach → 사용자는 nvim 화면부터 보임
+#   [신규] wt switch --create → tmux 세션 + dev(BE/FE) + nvim 윈도우 생성
+#   [기존] tmux 세션 생사 감지 → 누락 윈도우만 보완하거나 start hook으로 재기동
 #   결과:
 #     [wt-<branch> 세션]
-#     ├─ window 0 (dev) : 좌 BE 로그 / 우 FE 로그  ← `wt` CLI
-#     └─ window 1 (nvim): nvim                    ← wtn이 추가
+#     ├─ window 0 (nvim): nvim (NVIM_WORKTREE=1)   ← wtn이 추가
+#     └─ window 1 (dev) : 좌 FE 로그 / 우 BE 로그  ← `wt` CLI
 #     Ctrl+B + 0/1 로 전환
 # 주의:
 #   - 최초 실행 시 macOS가 "Ghostty가 시스템 이벤트 제어" 권한 요청 → 허용 필요
@@ -214,31 +211,91 @@ wtn() {
     echo "git repo 안에서 실행해주세요"
     return 1
   fi
-  # base 인자 사전 검증 — 오타로 새 탭 열고 실패하는 걸 방지
-  if [ -n "$base" ]; then
-    if ! git -C "$root" rev-parse --verify "$base" >/dev/null 2>&1; then
-      echo "❌ base 브랜치/커밋을 찾을 수 없습니다: $base"
-      echo "   - 오타 확인 (예: 'origint/master' → 'origin/master')"
-      echo "   - 원격 최신 받기: git fetch origin"
-      return 1
-    fi
-  fi
-  local wt_cmd="wt switch --create $name"
-  if [ -n "$base" ]; then
-    wt_cmd="$wt_cmd --base $base"
-  fi
-  # `wt switch`가 만드는 세션명과 동일하게 — 별도 세션 만들지 않고 그 세션에 합류
+
+  # `wt switch`가 만드는 세션명과 동일하게
   local wt_session="wt-${name//\//-}"
 
   # 탭 제목 라벨: <branch>(<base>) — base 없으면 <branch>만
   local label="$name"
   [ -n "$base" ] && label="$name($base)"
 
+  # 기존 worktree 존재 여부 확인 (신규 생성 vs 재연결 분기)
+  local _wtn_existing=0
+  if git -C "$root" worktree list | awk '{print $3}' | grep -qxF "[$name]"; then
+    _wtn_existing=1
+  fi
+
   # 실행 스크립트를 임시 파일로 생성 → 새 탭엔 짧은 한 줄만 paste
-  # (긴 명령을 직접 paste하면 탭 제목이 명령어 전체로 채워지는 문제 회피)
   local script
   script=$(mktemp -t "wtn-XXXXXX") || { echo "mktemp 실패"; return 1; }
-  cat > "$script" <<EOF
+
+  if [ "$_wtn_existing" = "1" ]; then
+    # ── ATTACH FLOW: 기존 worktree ──────────────────────────────────────────
+    cat > "$script" <<ATTACH_EOF
+#!/bin/zsh
+printf '\e]2;%s\a' '$label'
+
+if tmux has-session -t '$wt_session' 2>/dev/null; then
+  # 세션 살아있음 — nvim 윈도우가 없으면 추가, 있으면 그냥 포커스
+  if ! tmux list-windows -t '$wt_session' -F '#W' | grep -qx 'nvim'; then
+    fe_path="\$(tmux display-message -p -t '$wt_session:dev.1' '#{pane_current_path}' 2>/dev/null)"
+    worktree_path="\$(git -C "\$fe_path" rev-parse --show-toplevel 2>/dev/null)"
+    tmux new-window -t '$wt_session' -n nvim -c "\${worktree_path:-\$PWD}"
+    tmux send-keys -t '$wt_session:nvim' 'NVIM_WORKTREE=1 nvim .' Enter
+    tmux swap-window -s '$wt_session:dev' -t '$wt_session:nvim' 2>/dev/null || true
+  fi
+  tmux select-window -t '$wt_session:nvim' 2>/dev/null || tmux select-window -t '$wt_session'
+else
+  # 세션 없음 — start hook으로 dev 윈도우 재기동
+  set -e
+  cd '$root'
+  wt switch '$name'
+  wt hook pre-start start
+  tmux swap-pane -s '$wt_session:dev.1' -t '$wt_session:dev.2' 2>/dev/null || true
+  fe_path="\$(tmux display-message -p -t '$wt_session:dev.1' '#{pane_current_path}' 2>/dev/null)"
+  worktree_path="\$(git -C "\$fe_path" rev-parse --show-toplevel 2>/dev/null)"
+  # debugpy 포트 미기동이면 start-debug-session.sh 호출
+  if [ -f "\${worktree_path}/.env" ]; then
+    wt_api_port="\$(grep '^WORKTRUNK_API_PORT=' "\${worktree_path}/.env" | cut -d= -f2)"
+    if [ -n "\$wt_api_port" ]; then
+      debugpy_port="\$((wt_api_port + 40000))"
+      if ! lsof -i :"\$debugpy_port" -sTCP:LISTEN >/dev/null 2>&1; then
+        WT_SESSION_NAME='$wt_session' ~/.tmux/scripts/start-debug-session.sh "\$worktree_path"
+      fi
+    fi
+  fi
+  tmux new-window -t '$wt_session' -n nvim -c "\${worktree_path:-\$PWD}"
+  tmux send-keys -t '$wt_session:nvim' 'NVIM_WORKTREE=1 nvim .' Enter
+  tmux swap-window -s '$wt_session:dev' -t '$wt_session:nvim'
+  tmux select-window -t '$wt_session:nvim'
+fi
+
+tmux set-option -t '$wt_session' set-titles on
+tmux set-option -t '$wt_session' set-titles-string '$label'
+rm -f '$script'
+if [ -n "\$TMUX" ]; then
+  exec tmux switch-client -t '$wt_session'
+else
+  exec tmux attach -t '$wt_session'
+fi
+ATTACH_EOF
+
+  else
+    # ── CREATE FLOW: 신규 worktree (기존 로직 그대로, NVIM_WORKTREE=1만 추가) ──
+    # base 인자 사전 검증 — 오타로 새 탭 열고 실패하는 걸 방지
+    if [ -n "$base" ]; then
+      if ! git -C "$root" rev-parse --verify "$base" >/dev/null 2>&1; then
+        echo "❌ base 브랜치/커밋을 찾을 수 없습니다: $base"
+        echo "   - 오타 확인 (예: 'origint/master' → 'origin/master')"
+        echo "   - 원격 최신 받기: git fetch origin"
+        rm -f "$script"
+        return 1
+      fi
+    fi
+    local wt_cmd="wt switch --create $name"
+    [ -n "$base" ] && wt_cmd="$wt_cmd --base $base"
+
+    cat > "$script" <<CREATE_EOF
 #!/bin/zsh
 # paste 시 명령어 텍스트가 탭 제목에 잠시 들어가는 걸 즉시 덮어쓰기
 printf '\e]2;%s\a' '$label'
@@ -267,7 +324,7 @@ fi
 # 같은 세션에 nvim 윈도우 추가 — cwd는 worktree (본진 아님!).
 # 이게 본진 cwd로 열리면 nvim DAP가 본진 .env 기준 5678로 attach해버려서 충돌.
 tmux new-window -t '$wt_session' -n nvim -c "\${worktree_path:-\$PWD}"
-tmux send-keys -t '$wt_session:nvim' 'nvim .' Enter
+tmux send-keys -t '$wt_session:nvim' 'NVIM_WORKTREE=1 nvim .' Enter
 # 순서 교환: nvim → 1번 (왼쪽), dev → 2번 (오른쪽)
 tmux swap-window -s '$wt_session:dev' -t '$wt_session:nvim'
 tmux select-window -t '$wt_session:nvim'
@@ -281,7 +338,9 @@ if [ -n "\$TMUX" ]; then
 else
   exec tmux attach -t '$wt_session'
 fi
-EOF
+CREATE_EOF
+  fi
+
   chmod +x "$script"
 
   # clipboard엔 짧은 실행 명령만
@@ -299,6 +358,18 @@ tell application "System Events"
   keystroke return
 end tell
 EOF
+}
+
+# ===== ldb: open sqlit (lemonbase-local) in current tmux session's window :3 =====
+# - tmux 안에서만 동작
+# - :3 비어있으면 새로 만들고 `sqlit -c lemonbase-local` 실행
+# - :3 이미 있으면 그쪽으로 select-window만 (중복 실행 X)
+ldb() {
+  if [ -z "$TMUX" ]; then
+    echo "tmux 세션 안에서 실행해주세요."
+    return 1
+  fi
+  ~/.tmux/scripts/start-sqlit-window.sh
 }
 
 # Load local-only overrides (secrets, work aliases) — git-ignored
