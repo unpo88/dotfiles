@@ -271,15 +271,12 @@ else
   cd "\$worktree_dir"
   ./scripts/worktrunk/start.sh "\$_wt_api_port" "\$_wt_fe_port" "\$_wt_domain" '$_wtn_repo'
   tmux swap-pane -s '$wt_session:dev.1' -t '$wt_session:dev.2' 2>/dev/null || true
-  fe_path="\$(tmux display-message -p -t '$wt_session:dev.1' '#{pane_current_path}' 2>/dev/null)"
-  worktree_path="\$(git -C "\$fe_path" rev-parse --show-toplevel 2>/dev/null)"
-  if [ -n "\$worktree_path" ]; then
-    debugpy_port="\$(( \$_wt_api_port + 40000 ))"
-    if ! lsof -i :"\$debugpy_port" -sTCP:LISTEN >/dev/null 2>&1; then
-      WT_SESSION_NAME='$wt_session' ~/.tmux/scripts/start-debug-session.sh "\$worktree_path"
-    fi
+  # worktree_dir은 이미 정확히 알고 있으므로 tmux pane path 재조회 불필요
+  debugpy_port="\$(( \$_wt_api_port + 40000 ))"
+  if ! lsof -i :"\$debugpy_port" -sTCP:LISTEN >/dev/null 2>&1; then
+    WT_SESSION_NAME='$wt_session' ~/.tmux/scripts/start-debug-session.sh "\$worktree_dir"
   fi
-  tmux new-window -t '$wt_session' -n nvim -c "\${worktree_path:-\$PWD}"
+  tmux new-window -t '$wt_session' -n nvim -c "\$worktree_dir"
   tmux send-keys -t '$wt_session:nvim' 'NVIM_WORKTREE=1 nvim .' Enter
   tmux swap-window -s '$wt_session:dev' -t '$wt_session:nvim'
   tmux select-window -t '$wt_session:nvim'
