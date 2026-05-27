@@ -11,10 +11,11 @@ app_dir="$launch_root/app"
 # NOTE: the variable names below (WORKTRUNK_*) come from one project's .env
 # convention. Adjust if your project uses different names.
 if [ -f "$launch_root/.env" ] && grep -q "^WORKTRUNK_API_PORT=" "$launch_root/.env"; then
-  # Load branch-env metadata (WORKTRUNK_API_PORT, WORKTRUNK_DOMAIN, ...)
+  # Load branch-env metadata (WORKTRUNK_API_PORT, WORKTRUNK_DOMAIN, ...).
+  # NOTE: macOS 기본 bash 3.2는 `source <(...)` (process substitution)에서
+  # 변수를 부모 셸로 전파하지 못함. eval로 우회.
   set -a
-  # shellcheck disable=SC1091
-  source <(grep -E "^WORKTRUNK_" "$launch_root/.env")
+  eval "$(grep -E "^WORKTRUNK_" "$launch_root/.env")"
   set +a
 
   # worktree별 debugpy 포트: WORKTRUNK_API_PORT + 40000.
