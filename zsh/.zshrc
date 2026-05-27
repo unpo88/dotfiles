@@ -221,6 +221,8 @@ wtn() {
 
   # 기존 worktree 존재 여부 확인 (신규 생성 vs 재연결 분기)
   local _wtn_existing=0
+  local _wtn_repo
+  _wtn_repo=$(basename "$root")
   if git -C "$root" worktree list | awk '{print $3}' | grep -qxF "[$name]"; then
     _wtn_existing=1
   fi
@@ -246,22 +248,35 @@ if tmux has-session -t '$wt_session' 2>/dev/null; then
   fi
   tmux select-window -t '$wt_session:nvim' 2>/dev/null || tmux select-window -t '$wt_session'
 else
-  # 세션 없음 — start hook으로 dev 윈도우 재기동
+  # 세션 없음 — .env에서 WORKTRUNK_* 읽어 start.sh 직접 호출
+  # (wt switch는 인터랙티브 셸 통합 필요 → 스크립트 내 사용 불가)
   set -e
-  cd '$root'
-  wt switch '$name'
-  wt hook pre-start start
+  worktree_dir="\$(git -C '$root' worktree list | awk -v b='[$name]' '\$3==b {print \$1}')"
+  if [ -z "\$worktree_dir" ]; then
+    echo "❌ worktree '$name' 경로를 찾을 수 없습니다"
+    exit 1
+  fi
+  env_file="\${worktree_dir}/.env"
+  if [ ! -f "\$env_file" ]; then
+    echo "❌ \$env_file 없음 — setup이 완료되지 않은 worktree입니다"
+    exit 1
+  fi
+  _wt_api_port="\$(grep '^WORKTRUNK_API_PORT=' "\$env_file" | cut -d= -f2)"
+  _wt_fe_port="\$(grep '^WORKTRUNK_FRONTEND_PORT=' "\$env_file" | cut -d= -f2)"
+  _wt_domain="\$(grep '^WORKTRUNK_DOMAIN=' "\$env_file" | cut -d= -f2)"
+  if [ -z "\$_wt_api_port" ] || [ -z "\$_wt_fe_port" ] || [ -z "\$_wt_domain" ]; then
+    echo "❌ .env에 WORKTRUNK_* 값이 없습니다. setup이 완료되지 않은 worktree입니다"
+    exit 1
+  fi
+  cd "\$worktree_dir"
+  ./scripts/worktrunk/start.sh "\$_wt_api_port" "\$_wt_fe_port" "\$_wt_domain" '$_wtn_repo'
   tmux swap-pane -s '$wt_session:dev.1' -t '$wt_session:dev.2' 2>/dev/null || true
   fe_path="\$(tmux display-message -p -t '$wt_session:dev.1' '#{pane_current_path}' 2>/dev/null)"
   worktree_path="\$(git -C "\$fe_path" rev-parse --show-toplevel 2>/dev/null)"
-  # debugpy 포트 미기동이면 start-debug-session.sh 호출
-  if [ -f "\${worktree_path}/.env" ]; then
-    wt_api_port="\$(grep '^WORKTRUNK_API_PORT=' "\${worktree_path}/.env" | cut -d= -f2)"
-    if [ -n "\$wt_api_port" ]; then
-      debugpy_port="\$((wt_api_port + 40000))"
-      if ! lsof -i :"\$debugpy_port" -sTCP:LISTEN >/dev/null 2>&1; then
-        WT_SESSION_NAME='$wt_session' ~/.tmux/scripts/start-debug-session.sh "\$worktree_path"
-      fi
+  if [ -n "\$worktree_path" ]; then
+    debugpy_port="\$(( \$_wt_api_port + 40000 ))"
+    if ! lsof -i :"\$debugpy_port" -sTCP:LISTEN >/dev/null 2>&1; then
+      WT_SESSION_NAME='$wt_session' ~/.tmux/scripts/start-debug-session.sh "\$worktree_path"
     fi
   fi
   tmux new-window -t '$wt_session' -n nvim -c "\${worktree_path:-\$PWD}"
