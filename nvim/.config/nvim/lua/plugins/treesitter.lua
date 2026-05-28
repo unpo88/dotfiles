@@ -37,10 +37,26 @@ return {
   lazy = false,
   build = ":TSUpdate",
   config = function()
-    require("nvim-treesitter").setup({})
+    local ts = require("nvim-treesitter")
 
+    -- main 브랜치 감지: install API 존재 여부로 판단
+    -- spec에서 branch="main"으로 바꿔도 lazy가 :Lazy sync 전에는 디스크의 master 코드를 그대로 로드한다.
+    -- master에는 install() 함수가 없어 호출 시 nil error → 가드해서 안전하게 처리.
+    if type(ts.install) ~= "function" then
+      vim.schedule(function()
+        vim.notify(
+          "nvim-treesitter still on master branch.\n"
+            .. ":Lazy sync nvim-treesitter 실행 후 Neovim 재시작 필요.",
+          vim.log.levels.WARN,
+          { title = "nvim-treesitter migration" }
+        )
+      end)
+      return
+    end
+
+    ts.setup({})
     -- 미설치 파서만 비동기 설치 (설치된 건 no-op)
-    require("nvim-treesitter").install(parsers)
+    ts.install(parsers)
 
     -- main 브랜치는 highlight/indent를 자동 활성화하지 않음
     -- 파일 열릴 때마다 해당 언어 highlight + indent 켜기
