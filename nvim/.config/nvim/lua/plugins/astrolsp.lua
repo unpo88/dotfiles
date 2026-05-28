@@ -10,7 +10,8 @@ return {
   opts = {
     -- Configuration table of features provided by AstroLSP
     features = {
-      codelens = true, -- enable/disable codelens refresh on start
+      -- v6 default: nvim 0.12.0~0.12.1에서만 비활성. 그 외 버전에서는 활성.
+      codelens = not vim.version.range("0.12.0-0.12.1"):has(vim.version()),
       inlay_hints = false, -- enable/disable inlay hints on start
       semantic_tokens = true, -- enable/disable semantic token highlighting
     },
@@ -40,9 +41,30 @@ return {
     -- enable servers that you already have installed without mason
     servers = {
     },
-    -- customize language server configuration options passed to `lspconfig`
+    -- customize language server configuration options passed to `vim.lsp.config()`
+    -- v6: nvim-lspconfig 0.1.8+ 에서 vim.lsp.config() 테이블 기반 API로 전환.
+    -- v5에서 plugins/nvim-lspconfig.lua의 opts.servers에 있던 server-specific 설정은 여기로 이동.
     ---@diagnostic disable: missing-fields
     config = {
+      basedpyright = {
+        settings = {
+          basedpyright = {
+            disableOrganizeImports = true,
+            analysis = {
+              autoImportCompletions = true,
+              autoSearchPaths = true,
+              useLibraryCodeForTypes = true,
+              diagnosticMode = "openFilesOnly",
+              inlayHints = {
+                callArgumentNames = false,
+              },
+            },
+            venvPath = "./",
+            venv = ".venv",
+            importFormat = "absolute",
+          },
+        },
+      },
     },
     -- customize how language servers are attached
     handlers = {
@@ -84,6 +106,21 @@ return {
           desc = "Declaration of current symbol",
           cond = "textDocument/declaration",
         },
+        -- gd: 정의가 여러 개여도 첫 번째 결과로 바로 점프
+        gd = {
+          function()
+            vim.lsp.buf.definition({
+              on_list = function(opts)
+                if not opts.items or #opts.items == 0 then return end
+                local item = opts.items[1]
+                vim.cmd.edit(item.filename)
+                vim.api.nvim_win_set_cursor(0, { item.lnum, math.max(0, (item.col or 1) - 1) })
+              end,
+            })
+          end,
+          desc = "Go to definition (first match)",
+          cond = "textDocument/definition",
+        },
         ["<Leader>uY"] = {
           function() require("astrolsp.toggles").buffer_semantic_tokens() end,
           desc = "Toggle LSP semantic highlight (buffer)",
@@ -96,8 +133,13 @@ return {
     -- A custom `on_attach` function to be run after the default `on_attach` function
     -- takes two parameters `client` and `bufnr`  (`:h lspconfig-setup`)
     on_attach = function(client, bufnr)
-      -- this would disable semanticTokensProvider for all clients
-      -- client.server_capabilities.semanticTokensProvider = nil
+      -- ruff: pyright와 hover/definition/references가 겹쳐서 결과가 중복됨 → 끔
+      -- (lint/format은 그대로 유지)
+      if client.name == "ruff" then
+        client.server_capabilities.hoverProvider = false
+        client.server_capabilities.definitionProvider = false
+        client.server_capabilities.referencesProvider = false
+      end
     end,
   }
 }
