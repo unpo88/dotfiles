@@ -35,6 +35,7 @@ brew install \
   fd \
   lazygit \
   git \
+  gh \
   node \
   pyenv
 
@@ -86,15 +87,28 @@ else
   ok "already installed"
 fi
 
+# ─── gh extensions (gh-dash) ─────────────────────────────────────────────
+step "gh extensions"
+if command -v gh &>/dev/null && gh auth status &>/dev/null; then
+  if gh extension list 2>/dev/null | grep -q dlvhdr/gh-dash; then
+    ok "gh-dash already installed"
+  else
+    gh extension install dlvhdr/gh-dash
+  fi
+else
+  echo "gh CLI 미인증 — 'gh auth login' 후 'gh extension install dlvhdr/gh-dash' 직접 실행하세요."
+fi
+
 # ─── Done ────────────────────────────────────────────────────────────────
 step "Done"
 cat <<'EOF'
 
 다음 단계:
-  1. cd ~/dotfiles && stow nvim tmux ghostty zsh vim
+  1. cd ~/dotfiles && stow nvim tmux ghostty zsh vim gh-dash
   2. 새 zsh 세션 열기 (또는 exec zsh)
   3. nvim 실행 → lazy.nvim이 플러그인 + Mason 도구 자동 설치
   4. tmux 실행 → prefix + I 로 플러그인 설치
   5. (선택) vim 실행 → :PluginInstall
+  6. (gh 미인증 시) gh auth login → gh extension install dlvhdr/gh-dash
 
 EOF

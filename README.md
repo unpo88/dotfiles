@@ -11,6 +11,7 @@ dotfiles/
 ├── bootstrap.sh                                          # 새 컴퓨터 셋업 자동화
 ├── nvim/.config/nvim/                                    → ~/.config/nvim
 ├── tmux/.tmux.conf                                       → ~/.tmux.conf
+├── gh-dash/.config/gh-dash/config.yml                    → ~/.config/gh-dash/config.yml
 ├── ghostty/                                              # 상세는 ghostty/README.md
 │   └── Library/Application Support/com.mitchellh.ghostty/
 │       ├── config                                        → ~/Library/.../config
@@ -32,13 +33,14 @@ git clone git@github.com:unpo88/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./bootstrap.sh
 
 # 3. symlink 생성
-stow nvim tmux ghostty zsh vim
+stow nvim tmux ghostty zsh vim gh-dash
 ```
 
 이후 자동으로 처리되는 것:
 - **nvim**: 첫 실행 시 `lazy.nvim`이 `lazy-lock.json`의 플러그인 버전 그대로 설치, Mason이 LSP/formatter/debugger 자동 설치
 - **tmux**: `prefix + I` 한 번으로 플러그인 설치
 - **vim**: `:PluginInstall`로 Vundle 플러그인 설치
+- **gh-dash**: bootstrap.sh가 `gh auth status` 통과 시 `dlvhdr/gh-dash` extension 자동 설치 (미인증 시 `gh auth login` 후 수동 설치 안내)
 
 ## bootstrap.sh가 설치하는 것
 
@@ -47,7 +49,8 @@ stow nvim tmux ghostty zsh vim
 | 시스템 | Xcode CLT |
 | 패키지 매니저 | Homebrew |
 | 셸 | oh-my-zsh |
-| CLI 도구 | stow, neovim, tmux, ripgrep, fd, lazygit, git, node |
+| CLI 도구 | stow, neovim, tmux, ripgrep, fd, lazygit, git, gh, node |
+| gh extensions | dlvhdr/gh-dash (gh 인증 후 자동) |
 | 언어 환경 | pyenv + Python 3.12.11, nvm + Node 20/22 |
 | 터미널 | Ghostty (cask), JetBrains Mono Nerd Font |
 | 플러그인 매니저 | tmux TPM, vim Vundle |
