@@ -1,11 +1,14 @@
--- nvim-treesitter-textobjects: main 브랜치 강제
+-- nvim-treesitter-textobjects: main 브랜치 강제 + AstroNvim default 무력화
 --
--- AstroNvim 기본 spec이 이 플러그인을 자동으로 끌어오는데, 별도 지정이 없으면 master(archived)에서 가져온다.
--- master의 plugin/nvim-treesitter-textobjects.vim 이 require("nvim-treesitter.configs")를 호출하지만
--- nvim-treesitter main에는 그 모듈이 없어서 "module 'nvim-treesitter.configs' not found" 에러 발생.
---
--- 해결: textobjects도 main 브랜치 강제 (main에는 문제의 plugin/ 디렉토리 자체가 없음).
+-- 같은 이유 (nvim-treesitter master archive). textobjects의 master HEAD plugin/*.vim 이
+-- require("nvim-treesitter.configs") 호출해서 startup 즉시 깨짐.
+-- main 브랜치에는 plugin/ 디렉토리 자체가 없어서 그 트리거 자체가 사라진다.
 return {
   "nvim-treesitter/nvim-treesitter-textobjects",
   branch = "main",
+  lazy = true,
+  -- AstroNvim/다른 spec이 우리 spec과 merge되어도 main 브랜치 동작이 유지되도록 모든 옛 옵션 비움
+  init = function() end,
+  opts = function() return {} end,
+  config = function() end,
 }
