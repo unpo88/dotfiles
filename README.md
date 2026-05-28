@@ -99,6 +99,7 @@ alias work-vpn="..."
 
 - **smear-cursor.nvim** — nvim 내부 커서에 부드러운 트레일. `lua/plugins/smear-cursor.lua`.
 - **aerial.nvim commit pin** — nvim 0.12에서 `TSNode:start()`가 nil이 되어 v2.7.0이 깨집니다. `lua/plugins/aerial.lua`에서 v4.0.0 commit(`ac583c3`)으로 hard-pin. 이 pin은 `lazy-lock.json`보다 우선하므로 `:Lazy update`해도 v4.0.0 유지.
+- **neotest** — Django 러너 + `--keepdb` 사전 설정. `lua/plugins/neotest.lua`. 키맵은 `<leader>T*` (대문자) — AstroNvim 기본 `<leader>t` 터미널 그룹과 충돌 회피. `<leader>Tr`로 커서 위치 테스트 실행, `<leader>Tf` 파일 전체, `<leader>TA` 스위트 전체. 실행 시 `DJANGO_SETTINGS_MODULE=server.settings.test` 환경변수 자동 주입.
 
 ## 메모
 
