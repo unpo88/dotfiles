@@ -37,8 +37,7 @@ brew install \
   git \
   gh \
   node \
-  pyenv \
-  pngpaste
+  pyenv
 
 # ─── Casks (terminal + font) ─────────────────────────────────────────────
 step "Casks: Ghostty + Nerd Font"
@@ -86,6 +85,19 @@ if [ ! -d "$HOME/.vim/bundle/Vundle.vim" ]; then
   git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
 else
   ok "already installed"
+fi
+
+# ─── pbimg (클립보드 이미지 → 파일, pngpaste 대체) ───────────────────────
+step "pbimg"
+DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PBIMG_SRC="$DOTFILES_DIR/bin/pbimg.swift"
+PBIMG_BIN="$HOME/.local/bin/pbimg"
+mkdir -p "$HOME/.local/bin"
+if [ ! -f "$PBIMG_BIN" ] || [ "$PBIMG_SRC" -nt "$PBIMG_BIN" ]; then
+  swiftc "$PBIMG_SRC" -o "$PBIMG_BIN"
+  ok "compiled → $PBIMG_BIN"
+else
+  ok "already up to date"
 fi
 
 # ─── gh extensions (gh-dash) ─────────────────────────────────────────────

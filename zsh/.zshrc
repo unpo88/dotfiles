@@ -103,7 +103,7 @@ source $ZSH/oh-my-zsh.sh
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 # Homebrew
-export PATH=/opt/homebrew/bin:$PATH
+export PATH=/opt/homebrew/bin:$HOME/.local/bin:$PATH
 # pyenv
 export PYENV_ROOT="$HOME/.pyenv"
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
@@ -385,14 +385,16 @@ EOF
 # 사용법: clip2img → ~/clip.png 저장 후 경로 출력
 # Claude Code 프롬프트에 ~/clip.png 경로를 입력하면 이미지 첨부 가능
 clip2img() {
-  local dest="${1:-$HOME/clip.png}"
-  if ! command -v pngpaste &>/dev/null; then
-    echo "pngpaste가 설치되어 있지 않습니다. 'brew install pngpaste' 를 실행하세요."
+  if ! command -v pbimg &>/dev/null; then
+    echo "pbimg가 없습니다. dotfiles bootstrap.sh 를 다시 실행하세요."
     return 1
   fi
-  if pngpaste "$dest" 2>/dev/null; then
-    echo "저장됨: $dest"
-    echo "Claude 프롬프트에 다음 경로를 입력하세요: $dest"
+  local path
+  path=$(pbimg 2>/dev/null)
+  if [ $? -eq 0 ]; then
+    echo "$path" | pbcopy
+    echo "저장됨: $path"
+    echo "경로가 클립보드에 복사됨 — 프롬프트에서 Cmd+V 로 붙여넣기하세요."
   else
     echo "클립보드에 이미지가 없습니다. 이미지를 복사한 뒤 다시 실행하세요."
     return 1

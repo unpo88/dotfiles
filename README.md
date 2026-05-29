@@ -49,7 +49,7 @@ stow nvim tmux ghostty zsh vim gh-dash
 | 시스템 | Xcode CLT |
 | 패키지 매니저 | Homebrew |
 | 셸 | oh-my-zsh |
-| CLI 도구 | stow, neovim, tmux, ripgrep, fd, lazygit, git, gh, node, pngpaste |
+| CLI 도구 | stow, neovim, tmux, ripgrep, fd, lazygit, git, gh, node |
 | gh extensions | dlvhdr/gh-dash (gh 인증 후 자동) |
 | 언어 환경 | pyenv + Python 3.12.11, nvm + Node 20/22 |
 | 터미널 | Ghostty (cask), JetBrains Mono Nerd Font |
@@ -92,25 +92,31 @@ export ANTHROPIC_API_KEY="..."
 alias work-vpn="..."
 ```
 
-## Claude Code 터미널 이미지 첨부 (`clip2img`)
+## Claude Code 이미지 첨부 (`pbimg` + `clip2img`)
 
-터미널에서 Claude Code를 사용할 때 클립보드 이미지를 첨부하는 방법.
+`pbimg`는 macOS 클립보드에서 이미지를 읽어 `/tmp/`에 PNG로 저장하는 자체 제작 도구입니다 (`bin/pbimg.swift`). `bootstrap.sh`에서 `swiftc`로 컴파일되어 `~/.local/bin/pbimg`에 설치됩니다.
+
+### nvim 안에서 (권장)
+
+`<leader>ac`로 Claude 터미널을 열면 `<C-v>`가 자동으로 이미지 인식으로 동작합니다.
+
+```
+1. 이미지 복사 (Cmd+C)
+2. <leader>ac → Claude 터미널 열기
+3. 프롬프트에서 Ctrl+V → /tmp/claude_img_XXX.png 경로 자동 삽입
+4. 설명 입력 후 Enter
+```
+
+### 터미널에서 (nvim 없이)
 
 ```bash
 # 이미지를 복사(Cmd+C)한 뒤
 clip2img
-
-# 출력:
-# 저장됨: ~/clip.png
-# Claude 프롬프트에 다음 경로를 입력하세요: ~/clip.png
+# → 경로가 클립보드에 복사됨
+# → Claude 프롬프트에서 Cmd+V로 붙여넣기
 ```
 
-저장 경로를 바꾸고 싶으면 인자로 지정:
-```bash
-clip2img ~/screenshots/my-image.png
-```
-
-`bootstrap.sh`에서 `pngpaste`(macOS 클립보드 → 파일 변환 도구)가 자동 설치되며, `clip2img` 함수는 `.zshrc`에 정의되어 있습니다.
+이미지는 `/tmp/`에 저장되어 재부팅 시 자동 삭제됩니다.
 
 ## Ghostty 커스터마이즈 (셰이더 등)
 

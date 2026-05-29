@@ -77,6 +77,25 @@ local function send_selection_ref()
   send_to_claude(ref)
 end
 
+-- Claude 터미널 버퍼에서 Ctrl+V: 클립보드에 이미지 있으면 경로 삽입, 없으면 일반 붙여넣기
+vim.api.nvim_create_autocmd("TermOpen", {
+  callback = function()
+    local buf = vim.api.nvim_get_current_buf()
+    local name = vim.api.nvim_buf_get_name(buf)
+    if not name:lower():match("claude") then return end
+    vim.keymap.set("t", "<C-v>", function()
+      local chan = vim.b.terminal_job_id
+      if not chan then return end
+      local path = vim.fn.trim(vim.fn.system("pbimg"))
+      if vim.v.shell_error == 0 and path ~= "" then
+        vim.api.nvim_chan_send(chan, path)
+      else
+        vim.api.nvim_chan_send(chan, vim.fn.getreg("+"))
+      end
+    end, { buffer = buf })
+  end,
+})
+
 return {
   {
     "zbirenbaum/copilot.lua",
