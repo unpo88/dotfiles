@@ -49,7 +49,7 @@ stow nvim tmux ghostty zsh vim gh-dash
 | 시스템 | Xcode CLT |
 | 패키지 매니저 | Homebrew |
 | 셸 | oh-my-zsh |
-| CLI 도구 | stow, neovim, tmux, ripgrep, fd, lazygit, git, gh, node |
+| CLI 도구 | stow, neovim, tmux, ripgrep, fd, lazygit, git, gh, node, pngpaste |
 | gh extensions | dlvhdr/gh-dash (gh 인증 후 자동) |
 | 언어 환경 | pyenv + Python 3.12.11, nvm + Node 20/22 |
 | 터미널 | Ghostty (cask), JetBrains Mono Nerd Font |
@@ -91,6 +91,26 @@ export OPENAI_API_KEY="..."
 export ANTHROPIC_API_KEY="..."
 alias work-vpn="..."
 ```
+
+## Claude Code 터미널 이미지 첨부 (`clip2img`)
+
+터미널에서 Claude Code를 사용할 때 클립보드 이미지를 첨부하는 방법.
+
+```bash
+# 이미지를 복사(Cmd+C)한 뒤
+clip2img
+
+# 출력:
+# 저장됨: ~/clip.png
+# Claude 프롬프트에 다음 경로를 입력하세요: ~/clip.png
+```
+
+저장 경로를 바꾸고 싶으면 인자로 지정:
+```bash
+clip2img ~/screenshots/my-image.png
+```
+
+`bootstrap.sh`에서 `pngpaste`(macOS 클립보드 → 파일 변환 도구)가 자동 설치되며, `clip2img` 함수는 `.zshrc`에 정의되어 있습니다.
 
 ## Ghostty 커스터마이즈 (셰이더 등)
 

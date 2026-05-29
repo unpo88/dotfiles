@@ -37,7 +37,8 @@ brew install \
   git \
   gh \
   node \
-  pyenv
+  pyenv \
+  pngpaste
 
 # ─── Casks (terminal + font) ─────────────────────────────────────────────
 step "Casks: Ghostty + Nerd Font"

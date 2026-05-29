@@ -381,10 +381,35 @@ end tell
 EOF
 }
 
+# ===== clip2img: 클립보드 이미지를 파일로 저장 (Claude Code 터미널 이미지 첨부용) =====
+# 사용법: clip2img → ~/clip.png 저장 후 경로 출력
+# Claude Code 프롬프트에 ~/clip.png 경로를 입력하면 이미지 첨부 가능
+clip2img() {
+  local dest="${1:-$HOME/clip.png}"
+  if ! command -v pngpaste &>/dev/null; then
+    echo "pngpaste가 설치되어 있지 않습니다. 'brew install pngpaste' 를 실행하세요."
+    return 1
+  fi
+  if pngpaste "$dest" 2>/dev/null; then
+    echo "저장됨: $dest"
+    echo "Claude 프롬프트에 다음 경로를 입력하세요: $dest"
+  else
+    echo "클립보드에 이미지가 없습니다. 이미지를 복사한 뒤 다시 실행하세요."
+    return 1
+  fi
+}
+
+# Load local-only overrides (secrets, work aliases) — git-ignored
+# NOTE: 아래 dotfiles 함수가 .zshrc.local 의 alias 를 덮어쓸 수 있도록 *먼저* source.
+#       (예: .zshrc.local 에 `alias ldb=...` 가 있어도 dotfiles ldb 함수가 이김)
+[ -f ~/.zshrc.local ] && source ~/.zshrc.local
+
 # ===== ldb: open sqlit (lemonbase-local) in current tmux session's window :3 =====
 # - tmux 안에서만 동작
 # - :3 비어있으면 새로 만들고 `sqlit -c lemonbase-local` 실행
 # - :3 이미 있으면 그쪽으로 select-window만 (중복 실행 X)
+# NOTE: 같은 이름의 alias 가 .zshrc.local 에 있을 수 있으니 명시적으로 unalias 후 정의.
+unalias ldb 2>/dev/null
 ldb() {
   if [ -z "$TMUX" ]; then
     echo "tmux 세션 안에서 실행해주세요."
@@ -392,8 +417,5 @@ ldb() {
   fi
   ~/.tmux/scripts/start-sqlit-window.sh
 }
-
-# Load local-only overrides (secrets, work aliases) — git-ignored
-[ -f ~/.zshrc.local ] && source ~/.zshrc.local
 
 if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi
