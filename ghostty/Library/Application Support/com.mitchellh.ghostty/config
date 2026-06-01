@@ -53,14 +53,7 @@
 keybind = cmd+opt+k=text:\x1bk
 
 # ===== Shaders =====
-# 활성 커서 셰이더 (프레임 트레일)
-custom-shader = cursor_shaders/cursor_blaze.glsl
-
-# 대체 커서 셰이더 (사용하려면 위 줄을 주석 처리하고 원하는 줄의 주석 해제)
-# custom-shader = cursor_shaders/cursor_smear.glsl
-# custom-shader = cursor_shaders/cursor_smear_fade.glsl
-# custom-shader = cursor_shaders/cursor_blaze_no_trail.glsl
-# custom-shader = cursor_shaders/manga_slash.glsl
+# 커서 트레일은 nvim 의 smear-cursor.nvim 에서 처리하므로 Ghostty 커서 셰이더는 사용하지 않음
 
 # 배경 셰이더 (필요할 때 주석 해제)
 # custom-shader = shaders/snow.glsl

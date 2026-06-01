@@ -7,25 +7,16 @@
 ```
 ghostty/Library/Application Support/com.mitchellh.ghostty/
 ├── config                    # 메인 설정
-├── cursor_shaders/           # 커서 효과 GLSL
 └── shaders/                  # 배경/풀스크린 효과 GLSL
 ```
+
+> 커서 트레일 효과는 Ghostty 셰이더가 아니라 nvim 의 `smear-cursor.nvim` 플러그인에서 처리합니다.
 
 stow로 symlink되면 Ghostty는 `~/Library/Application Support/com.mitchellh.ghostty/` 에서 읽습니다.
 
 ## 셰이더 카탈로그
 
 `custom-shader = <path>` 옵션이 GLSL fragment 셰이더를 GPU에 올립니다. 여러 줄을 동시에 적으면 순차 layering됩니다.
-
-### cursor_shaders/ — 커서 효과
-
-| 파일 | 효과 |
-|------|------|
-| `cursor_blaze.glsl` ⭐ 활성 | 커서 이동 시 프레임 트레일(파란 불꽃) |
-| `cursor_blaze_no_trail.glsl` | 같은 효과, 트레일 없음 (잔상만) |
-| `cursor_smear.glsl` | 부드러운 smear 효과 |
-| `cursor_smear_fade.glsl` | smear + 페이드아웃 |
-| `manga_slash.glsl` | 망가/만화 슬래시 라인 |
 
 ### shaders/ — 배경/풀스크린 효과
 
@@ -40,14 +31,13 @@ stow로 symlink되면 Ghostty는 `~/Library/Application Support/com.mitchellh.gh
 
 ```ini
 # 활성 (한 줄만 주석 해제)
-custom-shader = cursor_shaders/cursor_blaze.glsl
-# custom-shader = cursor_shaders/cursor_smear.glsl
 # custom-shader = shaders/snow.glsl
+# custom-shader = shaders/crt.glsl
 ```
 
 ## 새 셰이더 추가
 
-1. `.glsl` 파일을 `cursor_shaders/` 또는 `shaders/`에 저장
+1. `.glsl` 파일을 `shaders/`에 저장
 2. `config`에 `custom-shader = ...` 라인 추가
 3. `Cmd+Shift+,` 로 reload
 
