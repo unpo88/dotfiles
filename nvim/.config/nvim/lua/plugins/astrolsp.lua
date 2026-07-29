@@ -106,6 +106,12 @@ return {
           desc = "Declaration of current symbol",
           cond = "textDocument/declaration",
         },
+        -- gr: 참조 목록을 snacks picker UI(<Leader>ff 화면)로 표시
+        gr = {
+          function() require("snacks").picker.lsp_references() end,
+          desc = "References of current symbol",
+          cond = "textDocument/references",
+        },
         -- gd: 정의가 여러 개여도 첫 번째 결과로 바로 점프
         gd = {
           function()

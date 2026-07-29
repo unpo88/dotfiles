@@ -52,6 +52,10 @@
 # nvim 의 ai.lua 에서 <M-k> 매핑이 Claude 로 파일/선택 영역 참조를 보냄
 keybind = cmd+opt+k=text:\x1bk
 
+# Cmd+Option+P → nvim 의 <M-p> 와 동일한 ESC+p 시퀀스 전송
+# nvim 의 ai.lua 에서 <M-p> 매핑이 oh-my-pi 로 파일/선택 영역 참조를 보냄
+keybind = cmd+opt+p=text:\x1bp
+
 # ===== Shaders =====
 # 커서 트레일은 nvim 의 smear-cursor.nvim 에서 처리하므로 Ghostty 커서 셰이더는 사용하지 않음
 

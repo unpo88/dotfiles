@@ -1,14 +1,3 @@
-local function find_local_biome(start_dir)
-  local dir = start_dir
-  while dir and dir ~= "" do
-    local candidate = dir .. "/node_modules/.bin/biome"
-    if vim.fn.executable(candidate) == 1 then return candidate end
-    local parent = vim.fn.fnamemodify(dir, ":h")
-    if parent == dir then break end
-    dir = parent
-  end
-end
-
 return {
   {
     "WhoIsSethDaniel/mason-tool-installer.nvim",
@@ -20,21 +9,12 @@ return {
     "AstroNvim/astrolsp",
     ---@type AstroLSPOpts
     opts = {
-      config = {
-        eslint = {
-          root_dir = require("lspconfig.util").root_pattern("eslint.config.mjs", "eslint.config.js"),
-        },
-        ts_ls = {
-          root_dir = require("lspconfig.util").root_pattern("tsconfig.json", "package.json"),
-        },
-        biome = {
-          root_dir = require("lspconfig.util").root_pattern("biome.json", "biome.jsonc"),
-          on_new_config = function(new_config, new_root_dir)
-            local local_biome = find_local_biome(new_root_dir)
-            if local_biome then new_config.cmd = { local_biome, "lsp-proxy" } end
-          end,
-        },
-      },
+      -- NOTE: ts_ls/eslint/biome 의 root_dir 오버라이드를 제거했습니다.
+      -- Neovim 0.11+ 의 vim.lsp.config 는 root_dir 를 function(bufnr, on_dir) 시그니처로
+      -- 호출하며 on_dir(dir) 가 불려야 서버가 시작됩니다. 기존의 lspconfig.util.root_pattern()
+      -- 은 구버전 API(디렉토리를 return) 라 on_dir 를 호출하지 않아 서버가 attach 되지 않았습니다.
+      -- nvim-lspconfig 의 기본 설정이 이미 새 API 로 올바르게 동작하고(biome 은 로컬
+      -- node_modules/.bin/biome 자동 우선 포함) 동일한 root 탐색을 수행하므로 기본값을 사용합니다.
       autocmds = {
         biome_actions_on_save = {
           cond = function(client) return client.name == "biome" end,
