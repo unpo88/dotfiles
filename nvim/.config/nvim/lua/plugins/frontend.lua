@@ -22,16 +22,26 @@ return {
     opts = {
       config = {
         eslint = {
-          root_dir = require("lspconfig.util").root_pattern("eslint.config.mjs", "eslint.config.js"),
+          -- nvim 0.12 vim.lsp.config는 root_dir(bufnr, on_dir) 시그니처를 요구한다.
+          -- 구 lspconfig.util.root_pattern은 on_dir을 호출하지 않아 서버가 안 뜬다.
+          root_dir = function(bufnr, on_dir)
+            on_dir(vim.fs.root(bufnr, { "eslint.config.mjs", "eslint.config.js" }))
+          end,
         },
         ts_ls = {
-          root_dir = require("lspconfig.util").root_pattern("tsconfig.json", "package.json"),
+          root_dir = function(bufnr, on_dir)
+            on_dir(vim.fs.root(bufnr, { "tsconfig.json", "package.json" }))
+          end,
         },
         biome = {
-          root_dir = require("lspconfig.util").root_pattern("biome.json", "biome.jsonc"),
-          on_new_config = function(new_config, new_root_dir)
-            local local_biome = find_local_biome(new_root_dir)
-            if local_biome then new_config.cmd = { local_biome, "lsp-proxy" } end
+          root_dir = function(bufnr, on_dir)
+            on_dir(vim.fs.root(bufnr, { "biome.json", "biome.jsonc" }))
+          end,
+          -- on_new_config는 lspconfig 전용이라 nvim 0.12 네이티브 vim.lsp에서는 호출되지 않는다.
+          -- 프로젝트 로컬 biome 바이너리 선택 로직을 cmd 함수로 이전 (config.root_dir 사용 가능).
+          cmd = function(dispatchers, config)
+            local bin = find_local_biome(config.root_dir) or "biome"
+            return vim.lsp.rpc.start({ bin, "lsp-proxy" }, dispatchers)
           end,
         },
       },

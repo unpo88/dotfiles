@@ -14,6 +14,10 @@ return {
         LineNrBelow = { fg = "#7d8290" },
         -- 현재 줄은 노란 강조 (기본 #adb0bb)
         CursorLineNr = { fg = "#e0c060", bold = true },
+        -- vim-illuminate: 변수 참조 하이라이트
+        IlluminatedWordText  = { bg = "#313748", underline = true }, -- 일반 참조
+        IlluminatedWordRead  = { bg = "#263640", underline = true }, -- 읽기 참조
+        IlluminatedWordWrite = { bg = "#3a2e3e", underline = true }, -- 쓰기 참조
       },
       astrodark = { -- a table of overrides/changes when applying the astrotheme theme
         -- Normal = { bg = "#000000" },

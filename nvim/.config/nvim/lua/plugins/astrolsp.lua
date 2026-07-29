@@ -46,12 +46,31 @@ return {
     -- v5에서 plugins/nvim-lspconfig.lua의 opts.servers에 있던 server-specific 설정은 여기로 이동.
     ---@diagnostic disable: missing-fields
     config = {
+      -- ty: auto-import completion 전용으로만 붙인다.
+      -- hover/navigation/rename/references/diagnostics 등 나머지는 basedpyright가 담당.
+      -- (capability 비활성화는 아래 on_attach에서 처리)
+      ty = {
+        settings = {
+          ty = {
+            diagnosticMode = "off",
+            showSyntaxErrors = false,
+            completions = {
+              autoImport = true,
+            },
+            inlayHints = {
+              callArgumentNames = false,
+              variableTypes = false,
+            },
+          },
+        },
+      },
       basedpyright = {
         settings = {
           basedpyright = {
             disableOrganizeImports = true,
             analysis = {
-              autoImportCompletions = true,
+              -- ty가 auto-import completion item을 제공하므로 basedpyright 쪽은 끈다.
+              autoImportCompletions = false,
               autoSearchPaths = true,
               useLibraryCodeForTypes = true,
               diagnosticMode = "openFilesOnly",
@@ -121,6 +140,12 @@ return {
           desc = "Go to definition (first match)",
           cond = "textDocument/definition",
         },
+        -- gr: 레퍼런스를 quickfix 대신 snacks picker(<Leader>ff 와 동일 UI)로 표시
+        gr = {
+          function() require("snacks").picker.lsp_references() end,
+          desc = "References of current symbol",
+          cond = "textDocument/references",
+        },
         ["<Leader>uY"] = {
           function() require("astrolsp.toggles").buffer_semantic_tokens() end,
           desc = "Toggle LSP semantic highlight (buffer)",
@@ -139,6 +164,28 @@ return {
         client.server_capabilities.hoverProvider = false
         client.server_capabilities.definitionProvider = false
         client.server_capabilities.referencesProvider = false
+      end
+
+      -- ty: completion(특히 auto-import)만 남기고 나머지 기능은 모두 끈다.
+      -- → basedpyright가 hover/navigation/rename/references/inlay hints/diagnostics 담당
+      if client.name == "ty" then
+        client.server_capabilities.codeActionProvider = false
+        client.server_capabilities.declarationProvider = false
+        client.server_capabilities.definitionProvider = false
+        client.server_capabilities.diagnosticProvider = false
+        client.server_capabilities.documentHighlightProvider = false
+        client.server_capabilities.documentSymbolProvider = false
+        client.server_capabilities.foldingRangeProvider = false
+        client.server_capabilities.hoverProvider = false
+        client.server_capabilities.implementationProvider = false
+        client.server_capabilities.inlayHintProvider = false
+        client.server_capabilities.referencesProvider = false
+        client.server_capabilities.renameProvider = false
+        client.server_capabilities.selectionRangeProvider = false
+        client.server_capabilities.semanticTokensProvider = false
+        client.server_capabilities.signatureHelpProvider = false
+        client.server_capabilities.typeDefinitionProvider = false
+        client.server_capabilities.workspaceSymbolProvider = false
       end
     end,
   }
