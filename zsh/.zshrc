@@ -153,25 +153,34 @@ source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 export PATH="/opt/homebrew/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 
-# ===== Ghostty에서만 nvim을 tmux로 감싸기 =====
+# ===== Orca/Ghostty에서 nvim을 독립 tmux 세션으로 감싸기 =====
 # 의도:
 #   - 어떤 터미널이든 셸 자체는 plain (자동 tmux attach 안 함)
-#   - 단, Ghostty에서 `nvim` 호출 시에만 tmux 'main' 세션 안에서 nvim 실행
-#   - 이미 tmux 안이거나 Ghostty가 아닌 터미널(iTerm 등)에선 plain nvim
+#   - 단, Orca/Ghostty에서 `nvim` 호출 시 worktree별 독립 tmux 세션 안에서 nvim 실행
+#   - 이미 tmux 안이거나 Orca/Ghostty가 아닌 터미널(iTerm 등)에선 plain nvim
 nvim() {
-  if [ -n "$TMUX" ] || [[ "$TERM_PROGRAM" != "ghostty" ]]; then
+  if [ -n "$TMUX" ] || [[ "$TERM_PROGRAM" != "ghostty" && "$TERM_PROGRAM" != "Orca" ]]; then
     command nvim "$@"
     return
   fi
+
   local quoted="command nvim"
   for arg in "$@"; do
     quoted+=" $(printf '%q' "$arg")"
   done
-  # Ghostty 창/탭/분할마다 독립된 ad-hoc 세션 (이름: nvim-<pid>).
-  # 같은 'main' 세션에 여러 client가 attach하면 모든 client가 같은 화면을
-  # 보게 되어(=tmux의 정상 동작) 분할 영역끼리 sync된 것처럼 보이는 문제 회피.
-  # nvim 종료 시 그 세션도 함께 종료되어 자동 정리됨.
-  tmux new-session -s "nvim-$$" "$quoted"
+
+  local root
+  root="$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+  local label
+  label="$(basename "$root" | tr -c '[:alnum:]_.-' '-')"
+  label="${label%-}"
+
+  local session="nvim-${label}-$$"
+
+  tmux new-session -d -s "$session" "$quoted"
+  tmux set-option -t "$session" detach-on-destroy on
+  tmux attach-session -t "$session"
 }
 
 # ===== Ghostty 탭 제목 자동 갱신 =====
@@ -182,21 +191,24 @@ precmd() {
   print -Pn "\e]2;${branch:-${PWD##*/}}\a"
 }
 
-# ===== wtn: open new Ghostty tab and bootstrap a branch worktree + nvim =====
+# ===== wtn: create/attach a branch worktree in Orca/Cmux + nvim =====
 # 사용법:
 #   wtn <branch-name>              신규 worktree 생성 또는 기존 worktree attach
 #   wtn <branch-name> <base>       특정 base 기준 신규 생성
 # 동작:
-#   [신규] wt switch --create → tmux 세션 + dev(BE/FE) + nvim 윈도우 생성
-#   [기존] tmux 세션 생사 감지 → 누락 윈도우만 보완하거나 start hook으로 재기동
+#   [Orca 터미널] wt가 worktree 생성 → Orca worktree 터미널에서 Worktrunk setup + nvim 실행
+#   [Cmux 터미널] 기존 Cmux workspace/tmux 세션 + dev(BE/FE) + nvim 윈도우 생성
 #   결과:
-#     [wt-<branch> 세션]
-#     ├─ window 0 (nvim): nvim (NVIM_WORKTREE=1)   ← wtn이 추가
-#     └─ window 1 (dev) : 좌 FE 로그 / 우 BE 로그  ← `wt` CLI
-#     Ctrl+B + 0/1 로 전환
+#     [Orca worktree: <branch>]
+#     └─ terminal: DB 복제/Worktrunk setup 로그 → NVIM_WORKTREE=1 nvim .
+#   또는:
+#     [Cmux workspace: <branch>]
+#     └─ [wt-<branch> tmux 세션]
+#        ├─ window 1 (nvim): nvim (NVIM_WORKTREE=1)   ← wtn이 추가
+#        └─ window 2 (dev) : 좌 FE 로그 / 우 BE 로그  ← `wt` CLI
+#     Ctrl-1/2 로 전환
 # 주의:
-#   - 최초 실행 시 macOS가 "Ghostty가 시스템 이벤트 제어" 권한 요청 → 허용 필요
-#   - clipboard 사용 (Cmd+V 시뮬레이션) → 기존 clipboard 내용은 덮어쓰여짐
+#   - Orca/Cmux workspace 생성에 실패하면 현재 터미널에서 실행하지 않고 오류로 종료
 wtn() {
   local name=$1
   local base=$2
@@ -225,6 +237,134 @@ wtn() {
   _wtn_repo=$(basename "$root")
   if git -C "$root" worktree list | awk '{print $3}' | grep -qxF "[$name]"; then
     _wtn_existing=1
+  fi
+
+  local _wtn_in_orca=0
+  if [ -n "$ORCA_WORKTREE_ID" ] || [ -n "$ORCA_TERMINAL_HANDLE" ]; then
+    _wtn_in_orca=1
+  fi
+
+  if [ "$_wtn_in_orca" = "1" ] && command -v orca >/dev/null 2>&1 && orca status --json >/dev/null 2>&1; then
+    if [ "$_wtn_existing" != "1" ] && [ -n "$base" ]; then
+      if ! git -C "$root" rev-parse --verify "$base" >/dev/null 2>&1; then
+        echo "❌ base 브랜치/커밋을 찾을 수 없습니다: $base"
+        echo "   - 오타 확인 (예: 'origint/master' → 'origin/master')"
+        echo "   - 원격 최신 받기: git fetch origin"
+        return 1
+      fi
+    fi
+
+    local wt_output worktree_path
+    local -a wt_args
+    wt_args=(switch --no-cd --no-hooks)
+    if [ "$_wtn_existing" != "1" ]; then
+      wt_args+=(--create)
+      [ -n "$base" ] && wt_args+=(--base "$base")
+      if ! wt_output=$(wt "${wt_args[@]}" "$name" 2>&1); then
+        echo "$wt_output" >&2
+        return 1
+      fi
+    fi
+
+    worktree_path=$(git -C "$root" worktree list | awk -v b="[$name]" '$3==b {print $1}')
+    if [ -z "$worktree_path" ]; then
+      echo "❌ worktree '$name' 경로를 찾을 수 없습니다" >&2
+      [ -n "$wt_output" ] && echo "$wt_output" >&2
+      return 1
+    fi
+
+    local orca_script
+    orca_script=$(mktemp -t "wtn-orca-XXXXXX") || { echo "mktemp 실패"; return 1; }
+    cat > "$orca_script" <<ORCA_EOF
+#!/bin/zsh
+set -e
+trap 'rm -f "\$0"' EXIT
+printf '\e]2;%s\a' '$label'
+
+cd ${(q)worktree_path}
+echo ""
+echo "⏳ setup + 서버 부팅까지 수 분 걸립니다 (DB 복제 포함). 끊지 말고 기다려 주세요."
+echo "   완료되면 자동으로 nvim 화면으로 전환됩니다."
+echo ""
+if [ '$_wtn_existing' != '1' ]; then
+  echo "▶ Worktrunk setup 실행: $label"
+  # --foreground: 훅은 기본이 백그라운드라 start.sh가 wt-test 세션을 만들기 전에
+  # 리턴해버린다. 그러면 아래 tmux 검사가 실패한다. 블로킹시켜 순차 실행 보장.
+  # -y: 비대화형 터미널에서 프로젝트 훅 승인 프롬프트로 멈추지 않도록.
+  wt hook pre-start --foreground -y
+else
+  echo "▶ Worktrunk 서버 시작: $label"
+  wt hook pre-start --foreground -y start
+fi
+
+env_file="\$PWD/.env"
+if [ -f "\$env_file" ]; then
+  _wt_domain="\$(grep '^WORKTRUNK_DOMAIN=' "\$env_file" | cut -d= -f2)"
+fi
+if [ -n "\$_wt_domain" ]; then
+  actual_session="wt-\${_wt_domain%.lemonbase.test}"
+else
+  actual_session='$wt_session'
+fi
+
+if ! tmux has-session -t "\$actual_session" 2>/dev/null; then
+  echo "❌ tmux 세션을 찾을 수 없습니다: \$actual_session"
+  exit 1
+fi
+
+if ! tmux list-windows -t "\$actual_session" -F '#W' | grep -qx 'nvim'; then
+  tmux new-window -t "\$actual_session" -n nvim -c "\$PWD"
+  tmux send-keys -t "\$actual_session:nvim" 'NVIM_WORKTREE=1 nvim .' Enter
+fi
+
+tmux swap-window -s "\$actual_session:nvim" -t "\$actual_session:1" 2>/dev/null || true
+tmux swap-window -s "\$actual_session:dev" -t "\$actual_session:2" 2>/dev/null || true
+tmux select-window -t "\$actual_session:nvim" 2>/dev/null || tmux select-window -t "\$actual_session"
+tmux set-option -t "\$actual_session" set-titles on
+tmux set-option -t "\$actual_session" set-titles-string '$label'
+
+echo "▶ tmux attach: \$actual_session"
+if [ -n "\$TMUX" ]; then
+  exec tmux switch-client -t "\$actual_session"
+else
+  exec tmux attach -t "\$actual_session"
+fi
+ORCA_EOF
+    chmod +x "$orca_script"
+
+    # wt가 새 worktree를 만든 직후엔 Orca 파일시스템 워처가 아직 등록 전이라
+    # path: 셀렉터가 selector_not_found로 실패한다(등록까지 ≈1초 걸림).
+    # 등록될 때까지 잠깐 대기(최대 5초) 후 진행.
+    if [ "$_wtn_existing" != "1" ]; then
+      local _orca_wait
+      for _orca_wait in 1 2 3 4 5 6 7 8 9 10; do
+        orca worktree show --worktree "path:$worktree_path" --json >/dev/null 2>&1 && break
+        sleep 0.5
+      done
+    fi
+
+    local orca_selector="path:$worktree_path"
+    local orca_worktree_json orca_worktree_id terminal_json terminal_handle
+    orca worktree set --worktree "$orca_selector" --display-name "$label" --workspace-status in-progress >/dev/null 2>&1 || true
+    if orca_worktree_json=$(orca worktree show --worktree "$orca_selector" --json 2>/dev/null); then
+      orca_worktree_id=$(printf '%s' "$orca_worktree_json" | jq -r '.result.worktree.id // empty' 2>/dev/null)
+      [ -n "$orca_worktree_id" ] && orca_selector="id:$orca_worktree_id"
+    fi
+
+    local run_cmd="zsh ${(q)orca_script}"
+    # 항상 새 터미널을 생성한다. 기존 터미널에 orca terminal send로 명령을 주입하면
+    # 그 터미널이 이미 tmux/nvim에 붙어 있거나 실행 중일 때 입력이 깨진다(예: zsh→ezsh).
+    # 새 터미널은 깨끗한 zsh에서 스크립트를 실행하므로 안전하다.
+    if terminal_json=$(orca terminal create --worktree "$orca_selector" --title "$label" --command "$run_cmd" --focus --json 2>&1); then
+      terminal_handle=$(printf '%s' "$terminal_json" | jq -r '.result.terminal.handle // .result.startupTerminal.handle // .result.handle // empty' 2>/dev/null)
+      [ -n "$terminal_handle" ] && orca terminal switch --terminal "$terminal_handle" --json >/dev/null 2>&1 || true
+      return
+    fi
+
+    echo "Orca worktree 터미널 생성 실패 — 현재 화면은 변경하지 않았습니다." >&2
+    [ -n "$terminal_json" ] && echo "$terminal_json" >&2
+    rm -f "$orca_script"
+    return 1
   fi
 
   # 실행 스크립트를 임시 파일로 생성 → 새 탭엔 짧은 한 줄만 paste
@@ -261,8 +401,10 @@ if tmux has-session -t "\$actual_session" 2>/dev/null; then
   if ! tmux list-windows -t "\$actual_session" -F '#W' | grep -qx 'nvim'; then
     tmux new-window -t "\$actual_session" -n nvim -c "\$worktree_dir"
     tmux send-keys -t "\$actual_session:nvim" 'NVIM_WORKTREE=1 nvim .' Enter
-    tmux swap-window -s "\$actual_session:dev" -t "\$actual_session:nvim" 2>/dev/null || true
   fi
+  # window 순서 고정: 1=nvim(코드), 2=dev(서버)
+  tmux swap-window -s "\$actual_session:nvim" -t "\$actual_session:1" 2>/dev/null || true
+  tmux swap-window -s "\$actual_session:dev" -t "\$actual_session:2" 2>/dev/null || true
   tmux select-window -t "\$actual_session:nvim" 2>/dev/null || tmux select-window -t "\$actual_session"
 else
   # 세션 없음 — .env에서 WORKTRUNK_* 읽어 start.sh 직접 호출
@@ -281,13 +423,11 @@ else
   cd "\$worktree_dir"
   ./scripts/worktrunk/start.sh "\$_wt_api_port" "\$_wt_fe_port" "\$_wt_domain" '$_wtn_repo'
   tmux swap-pane -s "\$actual_session:dev.1" -t "\$actual_session:dev.2" 2>/dev/null || true
-  debugpy_port="\$(( \$_wt_api_port + 40000 ))"
-  if ! lsof -i :"\$debugpy_port" -sTCP:LISTEN >/dev/null 2>&1; then
-    WT_SESSION_NAME="\$actual_session" ~/.tmux/scripts/start-debug-session.sh "\$worktree_dir"
-  fi
   tmux new-window -t "\$actual_session" -n nvim -c "\$worktree_dir"
   tmux send-keys -t "\$actual_session:nvim" 'NVIM_WORKTREE=1 nvim .' Enter
-  tmux swap-window -s "\$actual_session:dev" -t "\$actual_session:nvim"
+  # window 순서 고정: 1=nvim(코드), 2=dev(서버)
+  tmux swap-window -s "\$actual_session:nvim" -t "\$actual_session:1" 2>/dev/null || true
+  tmux swap-window -s "\$actual_session:dev" -t "\$actual_session:2" 2>/dev/null || true
   tmux select-window -t "\$actual_session:nvim"
 fi
 
@@ -328,26 +468,17 @@ $wt_cmd
 tmux swap-pane -s '$wt_session:dev.1' -t '$wt_session:dev.2'
 
 # worktree 디렉터리 계산:
-#   '$wt_session:dev'만 지정하면 swap-pane 직후 active pane(FE = worktree/app)이
-#   잡혀서 nvim cwd가 본진 app 폴더가 되고, debugpy_port_for_cwd()가 .env를
-#   못 찾아 5678로 fallback → BE는 WORKTRUNK_API_PORT+40000으로 listen 중이라
-#   attach 실패. 그래서 dev.1 pane path를 받아 git rev-parse로 worktree 루트로
-#   정규화한다 (BE/FE 어느 쪽이든 worktree 안이면 동일한 루트가 나옴).
+#   dev pane의 현재 경로가 worktree/app일 수 있으므로 git root로 정규화한다.
+#   nvim cwd가 본진이나 app 폴더가 아니라 worktree root여야 한다.
 fe_path="\$(tmux display-message -p -t '$wt_session:dev.1' '#{pane_current_path}' 2>/dev/null)"
 worktree_path="\$(git -C "\$fe_path" rev-parse --show-toplevel 2>/dev/null)"
 
-# BE를 debugpy 모드로 자동 재시작 (start-debug-session.sh의 worktrunk 분기 활용).
-# tmux 외부 셸에서 호출하므로 WT_SESSION_NAME으로 대상 세션 지정.
-if [ -n "\$worktree_path" ]; then
-  WT_SESSION_NAME='$wt_session' ~/.tmux/scripts/start-debug-session.sh "\$worktree_path"
-fi
-
-# 같은 세션에 nvim 윈도우 추가 — cwd는 worktree (본진 아님!).
-# 이게 본진 cwd로 열리면 nvim DAP가 본진 .env 기준 5678로 attach해버려서 충돌.
+# 같은 세션에 nvim 윈도우 추가 — cwd는 worktree root (본진 아님!).
 tmux new-window -t '$wt_session' -n nvim -c "\${worktree_path:-\$PWD}"
 tmux send-keys -t '$wt_session:nvim' 'NVIM_WORKTREE=1 nvim .' Enter
-# 순서 교환: nvim → 1번 (왼쪽), dev → 2번 (오른쪽)
-tmux swap-window -s '$wt_session:dev' -t '$wt_session:nvim'
+# window 순서 고정: 1=nvim(코드), 2=dev(서버)
+tmux swap-window -s '$wt_session:nvim' -t '$wt_session:1' 2>/dev/null || true
+tmux swap-window -s '$wt_session:dev' -t '$wt_session:2' 2>/dev/null || true
 tmux select-window -t '$wt_session:nvim'
 # tmux가 탭 제목을 윈도우 이름(nvim/dev)으로 덮어쓰지 않도록 세션에 고정 라벨
 tmux set-option -t '$wt_session' set-titles on
@@ -364,21 +495,26 @@ CREATE_EOF
 
   chmod +x "$script"
 
-  # clipboard엔 짧은 실행 명령만
-  echo -n "zsh $script" | pbcopy
+  local run_cmd="zsh ${(q)script}"
+  local cmux_error=""
 
-  # Ghostty 활성화 + 새 탭(Cmd+T) + 붙여넣기(Cmd+V) + 엔터
-  osascript <<EOF
-tell application "Ghostty" to activate
-delay 0.2
-tell application "System Events"
-  keystroke "t" using command down
-  delay 0.6
-  keystroke "v" using command down
-  delay 0.1
-  keystroke return
-end tell
-EOF
+  if ! command -v cmux >/dev/null 2>&1; then
+    echo "cmux 명령어를 찾을 수 없습니다. 현재 화면은 변경하지 않았습니다." >&2
+    rm -f "$script"
+    return 1
+  fi
+
+  if cmux_error="$(cmux workspace create --name "$label" --cwd "$root" --command "$run_cmd" --focus false 2>&1)"; then
+    return
+  fi
+
+  echo "cmux 새 작업 공간 생성 실패 — 현재 화면은 변경하지 않았습니다." >&2
+  if [[ "$cmux_error" == *"only processes started inside cmux can connect"* ]]; then
+    echo "현재 셸은 Cmux가 직접 시작한 terminal이 아닙니다. Cmux에서 Cmd+N으로 새 작업 공간을 만든 뒤 그 터미널에서 wtn을 실행하세요." >&2
+  fi
+  [ -n "$cmux_error" ] && echo "$cmux_error" >&2
+  rm -f "$script"
+  return 1
 }
 
 # ===== clip2img: 클립보드 이미지를 파일로 저장 (Claude Code 터미널 이미지 첨부용) =====
