@@ -100,6 +100,25 @@ else
   ok "already up to date"
 fi
 
+# ─── Orca Nvim key remapper (Cmd+Option+P/K → Alt+p/k) ───────────────────
+step "Orca Nvim key remapper"
+ORCA_REMAP_SRC="$DOTFILES_DIR/bin/orca-nvim-key-remap.swift"
+ORCA_REMAP_BIN="$HOME/.local/bin/orca-nvim-key-remap"
+if [ ! -f "$ORCA_REMAP_BIN" ] || [ "$ORCA_REMAP_SRC" -nt "$ORCA_REMAP_BIN" ]; then
+  swiftc "$ORCA_REMAP_SRC" -o "$ORCA_REMAP_BIN"
+  ok "compiled → $ORCA_REMAP_BIN"
+else
+  ok "already up to date"
+fi
+
+cat <<'EOF'
+Orca 키 리매퍼 활성화:
+  1. cd ~/dotfiles && stow orca-nvim-key-remap
+  2. System Settings → Privacy & Security → Accessibility 에 ~/.local/bin/orca-nvim-key-remap 추가
+  3. launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.whatsup.orca-nvim-key-remap.plist"
+
+EOF
+
 # ─── gh extensions (gh-dash) ─────────────────────────────────────────────
 step "gh extensions"
 if command -v gh &>/dev/null && gh auth status &>/dev/null; then
@@ -117,7 +136,7 @@ step "Done"
 cat <<'EOF'
 
 다음 단계:
-  1. cd ~/dotfiles && stow nvim tmux ghostty zsh vim gh-dash
+  1. cd ~/dotfiles && stow nvim tmux ghostty zsh vim gh-dash orca-nvim-key-remap
   2. 새 zsh 세션 열기 (또는 exec zsh)
   3. nvim 실행 → lazy.nvim이 플러그인 + Mason 도구 자동 설치
   4. tmux 실행 → prefix + I 로 플러그인 설치
