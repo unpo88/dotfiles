@@ -69,10 +69,10 @@ fi
 # 현재 세션 이름 가져오기 (새 세션 만들지 않고 그대로 사용)
 session_name="$(tmux display -p '#S')"
 
-# 이미 be-fe window가 있으면 그쪽으로 이동만 (중복 실행 방지)
+# 이미 be-fe window가 있으면 (debug/dev 무관) 내리고 새로 띄움
 if tmux list-windows -t "$session_name" -F '#W' | grep -qx 'be-fe'; then
-  tmux select-window -t "${session_name}:be-fe"
-  exit 0
+  tmux kill-window -t "${session_name}:be-fe"
+  sleep 0.5
 fi
 
 # 새 window "be-fe" 만들기 (현재 nvim window는 건드리지 않음)
