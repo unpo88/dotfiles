@@ -124,6 +124,44 @@ clip2img
 
 활성 셰이더 빠르게 바꾸기: `ghostty/.../config`의 `# ===== Shaders =====` 블록에서 주석 처리만 바꾸고 `Cmd+Shift+,`로 reload.
 
+## `wtn` — worktree 원커맨드 런처 (Orca / Cmux / tmux)
+
+브랜치별 git worktree를 만들고, 그 안에서 dev 서버(백엔드+프론트)와 nvim을
+자동으로 띄우는 zsh 함수. 정의는 `zsh/.zshrc`의 `wtn()` (`# ===== wtn:` 블록).
+
+```bash
+wtn my-feature                 # 신규 worktree 생성 또는 기존 attach
+wtn my-feature origin/master   # 특정 base 기준 신규 생성
+```
+
+### 동작 흐름
+
+1. `wt`(Worktrunk)로 worktree 생성/attach
+2. 실행 환경 감지:
+   - **Orca 안** (`ORCA_WORKTREE_ID`/`ORCA_TERMINAL_HANDLE` 존재 + `orca` CLI) →
+     Orca worktree 터미널을 새로 만들어 setup + 서버 기동
+   - 그 외 → Cmux/일반 tmux 폴백
+3. 프로젝트 훅(`wt hook pre-start`)이 `scripts/worktrunk/start.sh` 실행 →
+   Caddy 라우트 등록 + tmux `wt-<branch>` 세션에 BE(runserver)/FE(vite) pane 기동
+4. tmux에 `nvim` window 추가 (`NVIM_WORKTREE=1 nvim .`) 후 그 화면으로 전환
+
+### 다른 맥에서 쓰려면 (dotfiles만으론 부족)
+
+`wtn` 함수 자체는 `zsh/.zshrc`에 있어 stow하면 따라오지만, **호출하는 도구들은
+이 repo 밖에 있음**. 새 맥에서 다음이 갖춰져야 동작함:
+
+| 의존 | 어디서 오나 |
+|---|---|
+| `wt` (Worktrunk CLI) | 별도 설치 |
+| `orca` CLI + Orca 앱 | 별도 설치 (Orca 워크플로우 쓸 때만) |
+| tmux | `bootstrap.sh`가 설치 |
+| Caddy | 별도 설치 (로컬 HTTPS 프록시용) |
+| `scripts/worktrunk/*.sh` + 훅 설정 | **대상 프로젝트 저장소** (예: lemonbase). dotfiles 아님 — 프로젝트를 clone/pull하면 따라옴 |
+| `NVIM_WORKTREE=1` 처리 | `nvim/.config/nvim/lua/polish.lua` (dotfiles ✓ — resession 자동복원 스킵) |
+
+즉 **dotfiles clone + stow → 프로젝트 저장소 최신화 → `wt`·`orca`·Caddy 설치**
+순서면 새 맥에서도 `wtn`이 동일하게 동작함.
+
 ## nvim 플러그인 노트
 
 - **smear-cursor.nvim** — nvim 내부 커서에 부드러운 트레일. `lua/plugins/smear-cursor.lua`.
